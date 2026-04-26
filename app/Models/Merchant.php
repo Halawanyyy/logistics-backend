@@ -2,15 +2,14 @@
 
 namespace App\Models;
 
-use App\Traits\Auditable;
 use App\Modules\Attachment\Models\Attachment;
+use App\Modules\Export\Models\ExportLog;
+use App\Modules\Finance\Models\MerchantWalletTransaction;
+use App\Modules\LocationPricing\Models\PricingPlan;
 use App\Modules\MerchantIntegration\Models\MerchantIntegrationToken;
 use App\Modules\MerchantPortal\Models\MerchantNotification;
 use App\Modules\MerchantPortal\Models\MerchantPortalSetting;
 use App\Modules\MerchantPortal\Models\MerchantUser;
-use App\Modules\Export\Models\ExportLog;
-use App\Modules\LocationPricing\Models\PricingPlan;
-use App\Modules\Finance\Models\MerchantWalletTransaction;
 use App\Modules\Warehouse\Models\WarehouseCharge;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,7 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Merchant extends Model
 {
-    use Auditable, SoftDeletes;
+    use SoftDeletes;
 
     /**
      * @var list<string>

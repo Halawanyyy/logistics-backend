@@ -4,25 +4,24 @@ namespace App\Modules\Order\Models;
 
 use App\Models\Merchant;
 use App\Models\User;
-use App\Traits\Auditable;
 use App\Modules\LocationPricing\Models\Area;
 use App\Modules\LocationPricing\Models\Governorate;
 use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\OrderStockReservation;
+use Database\Factories\OrderFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
-    use Auditable, SoftDeletes;
+    /** @use HasFactory<OrderFactory> */
+    use HasFactory;
 
-    /**
-     * @var list<string>
-     */
-    protected array $auditExcluded = ['barcode'];
+    use SoftDeletes;
 
     /**
      * @var list<string>

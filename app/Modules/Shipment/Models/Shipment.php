@@ -4,16 +4,13 @@ namespace App\Modules\Shipment\Models;
 
 use App\Models\Merchant;
 use App\Models\User;
-use App\Traits\Auditable;
-use App\Modules\Driver\Models\DriverManifestItem;
 use App\Modules\Driver\Models\Driver;
+use App\Modules\Driver\Models\DriverManifestItem;
 use App\Modules\LocationPricing\Models\Area;
 use App\Modules\LocationPricing\Models\Governorate;
 use App\Modules\Order\Enums\OrderType;
-use App\Modules\Order\Models\OrderItem;
 use App\Modules\Order\Models\Order;
-use App\Modules\Shipment\Enums\ShipmentStatus;
-use Illuminate\Database\Eloquent\Builder;
+use App\Modules\Order\Models\OrderItem;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,7 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Shipment extends Model
 {
-    use Auditable, SoftDeletes;
+    use SoftDeletes;
 
     /**
      * @var list<string>

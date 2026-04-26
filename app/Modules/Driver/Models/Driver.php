@@ -3,9 +3,7 @@
 namespace App\Modules\Driver\Models;
 
 use App\Models\User;
-use App\Traits\Auditable;
 use App\Modules\Shipment\Models\Shipment;
-use App\Modules\Shipment\Models\DeliveryAttempt;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,7 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Driver extends Model
 {
-    use Auditable, SoftDeletes;
+    use SoftDeletes;
 
     /**
      * @var list<string>
