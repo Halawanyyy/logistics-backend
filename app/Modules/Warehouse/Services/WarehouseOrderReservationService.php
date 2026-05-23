@@ -2,9 +2,13 @@
 
 namespace App\Modules\Warehouse\Services;
 
+use App\Modules\Audit\Enums\AuditEventType;
+use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Order\Enums\OrderFulfillmentType;
+use App\Modules\Order\Enums\OrderItemDeliveryStatus;
 use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Models\Order;
+use App\Modules\Order\Models\OrderItem;
 use App\Modules\Warehouse\Enums\OrderStockReservationStatus;
 use App\Modules\Warehouse\Enums\StockMovementType;
 use App\Modules\Warehouse\Models\InventoryStock;
@@ -17,6 +21,11 @@ use Illuminate\Support\Facades\DB;
 
 class WarehouseOrderReservationService
 {
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
+
     public function reserve(Order $order, array $data): Collection
     {
         return DB::transaction(function () use ($order, $data) {
@@ -85,7 +94,26 @@ class WarehouseOrderReservationService
                     userId: $userId,
                 );
 
+                $this->auditLogService->log(
+                    AuditEventType::STOCK_RESERVED,
+                    'reserved',
+                    'warehouse_product',
+                    (int) $item['warehouse_product_id'],
+                    [
+                        'user_id' => $userId,
+                        'metadata' => [
+                            'warehouse_id' => (int) $data['warehouse_id'],
+                            'order_id' => $lockedOrder->id,
+                            'reservation_id' => $reservation->id,
+                            'quantity' => (int) $item['quantity'],
+                        ],
+                        'notes' => $reservation->notes,
+                    ],
+                );
+
                 $reservations->push($reservation);
+
+                $this->syncOrderItemReservationStatus($reservation->orderItem()->first());
             }
 
             return $reservations->load($this->reservationRelations());
@@ -147,6 +175,25 @@ class WarehouseOrderReservationService
                     referenceId: (int) $reservation->id,
                     userId: $userId,
                 );
+
+                $this->auditLogService->log(
+                    AuditEventType::STOCK_RELEASED,
+                    'released',
+                    'warehouse_product',
+                    (int) $reservation->warehouse_product_id,
+                    [
+                        'user_id' => $userId,
+                        'metadata' => [
+                            'warehouse_id' => (int) $reservation->warehouse_id,
+                            'order_id' => $lockedOrder->id,
+                            'reservation_id' => $reservation->id,
+                            'quantity' => (int) $reservation->quantity,
+                        ],
+                        'notes' => $reservation->notes,
+                    ],
+                );
+
+                $this->syncOrderItemReservationStatus($reservation->orderItem()->first());
             }
 
             return $reservations->load($this->reservationRelations());
@@ -207,6 +254,8 @@ class WarehouseOrderReservationService
                     referenceId: (int) $reservation->id,
                     userId: $userId,
                 );
+
+                $this->syncOrderItemReservationStatus($reservation->orderItem()->first());
             }
 
             return $reservations->load($this->reservationRelations());
@@ -272,6 +321,29 @@ class WarehouseOrderReservationService
             'notes' => $notes,
             'created_by' => $userId,
         ]);
+    }
+
+    private function syncOrderItemReservationStatus(?OrderItem $orderItem): void
+    {
+        if ($orderItem === null) {
+            return;
+        }
+
+        if ((int) $orderItem->delivered_quantity > 0 || (int) $orderItem->returned_quantity > 0 || (int) $orderItem->damaged_quantity > 0) {
+            return;
+        }
+
+        if ($orderItem->stockReservations()->where('status', OrderStockReservationStatus::FULFILLED)->exists()) {
+            $orderItem->update(['delivery_status' => OrderItemDeliveryStatus::FULFILLED]);
+            return;
+        }
+
+        if ($orderItem->stockReservations()->where('status', OrderStockReservationStatus::RESERVED)->exists()) {
+            $orderItem->update(['delivery_status' => OrderItemDeliveryStatus::RESERVED]);
+            return;
+        }
+
+        $orderItem->update(['delivery_status' => OrderItemDeliveryStatus::PENDING]);
     }
 
     /**

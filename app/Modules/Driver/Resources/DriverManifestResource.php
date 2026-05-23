@@ -2,6 +2,7 @@
 
 namespace App\Modules\Driver\Resources;
 
+use App\Modules\Finance\Resources\DriverCashClosureResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,6 +12,48 @@ class DriverManifestResource extends JsonResource
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
+    {
+        if (is_array($this->resource) && isset($this->resource['generated_at'])) {
+            return $this->legacyManifestArray();
+        }
+
+        return [
+            'id' => $this->id,
+            'manifest_number' => $this->manifest_number,
+            'manifest_date' => $this->manifest_date?->toDateString(),
+            'status' => $this->status,
+            'driver' => [
+                'id' => $this->driver?->id,
+                'name' => $this->driver?->name,
+                'phone' => $this->driver?->phone,
+                'vehicle_type' => $this->driver?->vehicle_type,
+                'vehicle_plate' => $this->driver?->vehicle_plate,
+            ],
+            'summary' => [
+                'total_shipments' => $this->total_shipments,
+                'expected_cod_amount' => $this->expected_cod_amount,
+                'actual_received_amount' => $this->actual_received_amount,
+                'difference_amount' => $this->difference_amount,
+                'closed_shipments_count' => $this->relationLoaded('items')
+                    ? $this->items->whereNotNull('final_status')->count()
+                    : null,
+            ],
+            'notes' => $this->notes,
+            'items' => $this->whenLoaded('items', fn () => DriverManifestItemResource::collection($this->items)),
+            'cash_closure' => $this->whenLoaded('cashClosure', fn () => new DriverCashClosureResource($this->cashClosure)),
+            'created_by' => $this->created_by,
+            'created_by_name' => $this->createdBy?->name,
+            'closed_by' => $this->closed_by,
+            'closed_by_name' => $this->closedBy?->name,
+            'closed_at' => $this->closed_at,
+            'created_at' => $this->created_at,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function legacyManifestArray(): array
     {
         $shipments = collect($this->resource['shipments']);
 

@@ -7,11 +7,18 @@ use App\Modules\LocationPricing\Requests\CalculateShippingRateRequest;
 use App\Modules\LocationPricing\Requests\StoreShippingRateRequest;
 use App\Modules\LocationPricing\Requests\UpdateShippingRateRequest;
 use App\Modules\LocationPricing\Resources\ShippingRateResource;
+use App\Modules\Order\Enums\OrderType;
+use App\Modules\Order\Services\OrderShippingFeeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ShippingRateController
 {
+    public function __construct(
+        private readonly OrderShippingFeeService $orderShippingFeeService,
+    ) {
+    }
+
     public function index(): AnonymousResourceCollection
     {
         $shippingRates = ShippingRate::query()
@@ -67,44 +74,27 @@ class ShippingRateController
     {
         $governorateId = $request->integer('governorate_id');
         $areaId = $request->input('area_id');
+        $resolvedShipping = $this->orderShippingFeeService->resolve(
+            $request->integer('merchant_id', 0),
+            $governorateId,
+            $areaId !== null ? (int) $areaId : null,
+            $request->input('order_type', OrderType::DELIVERY),
+        );
 
-        if ($areaId !== null) {
-            $areaRate = ShippingRate::query()
-                ->where('governorate_id', $governorateId)
-                ->where('area_id', $areaId)
-                ->where('is_active', true)
-                ->first();
-
-            if ($areaRate !== null) {
-                return response()->json([
-                    'data' => [
-                        'governorate_id' => $areaRate->governorate_id,
-                        'area_id' => $areaRate->area_id,
-                        'shipping_fee' => number_format((float) $areaRate->shipping_fee, 2, '.', ''),
-                        'source' => 'area',
-                    ],
-                ]);
-            }
-        }
-
-        $governorateRate = ShippingRate::query()
-            ->where('governorate_id', $governorateId)
-            ->whereNull('area_id')
-            ->where('is_active', true)
-            ->first();
-
-        if ($governorateRate === null) {
+        if ($resolvedShipping['source'] === null) {
             return response()->json([
-                'message' => 'No active shipping rate found for this location.',
+                'message' => 'Shipping rate not configured.',
             ], 404);
         }
 
         return response()->json([
             'data' => [
-                'governorate_id' => $governorateRate->governorate_id,
+                'merchant_id' => $request->input('merchant_id'),
+                'order_type' => $request->input('order_type', OrderType::DELIVERY),
+                'governorate_id' => $governorateId,
                 'area_id' => $areaId,
-                'shipping_fee' => number_format((float) $governorateRate->shipping_fee, 2, '.', ''),
-                'source' => 'governorate',
+                'shipping_fee' => number_format((float) $resolvedShipping['shipping_fee'], 2, '.', ''),
+                'source' => $resolvedShipping['source'],
             ],
         ]);
     }

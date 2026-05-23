@@ -4,6 +4,8 @@ namespace App\Modules\Finance\Models;
 
 use App\Models\User;
 use App\Modules\Driver\Models\Driver;
+use App\Modules\Driver\Models\DriverManifest;
+use App\Modules\Finance\Models\TreasuryAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -17,6 +19,8 @@ class DriverCashClosure extends Model
      */
     protected $fillable = [
         'driver_id',
+        'driver_manifest_id',
+        'treasury_account_id',
         'closure_date',
         'expected_amount',
         'received_amount',
@@ -46,6 +50,16 @@ class DriverCashClosure extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    public function driverManifest(): BelongsTo
+    {
+        return $this->belongsTo(DriverManifest::class, 'driver_manifest_id');
+    }
+
+    public function treasuryAccount(): BelongsTo
+    {
+        return $this->belongsTo(TreasuryAccount::class);
     }
 
     public function createdBy(): BelongsTo

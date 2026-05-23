@@ -38,4 +38,9 @@ class Governorate extends Model
     {
         return $this->hasMany(ShippingRate::class);
     }
+
+    public function pricingPlanRates(): HasMany
+    {
+        return $this->hasMany(PricingPlanRate::class);
+    }
 }

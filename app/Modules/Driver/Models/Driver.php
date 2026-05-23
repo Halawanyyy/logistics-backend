@@ -3,7 +3,9 @@
 namespace App\Modules\Driver\Models;
 
 use App\Models\User;
+use App\Traits\Auditable;
 use App\Modules\Shipment\Models\Shipment;
+use App\Modules\Shipment\Models\DeliveryAttempt;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Driver extends Model
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
 
     /**
      * @var list<string>
@@ -45,5 +47,15 @@ class Driver extends Model
     public function shipments(): HasMany
     {
         return $this->hasMany(Shipment::class, 'assigned_driver_id');
+    }
+
+    public function manifests(): HasMany
+    {
+        return $this->hasMany(DriverManifest::class);
+    }
+
+    public function deliveryAttempts(): HasMany
+    {
+        return $this->hasMany(DeliveryAttempt::class);
     }
 }

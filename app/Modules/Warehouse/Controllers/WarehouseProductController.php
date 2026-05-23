@@ -7,11 +7,17 @@ use App\Modules\Warehouse\Requests\ListWarehouseProductsRequest;
 use App\Modules\Warehouse\Requests\StoreWarehouseProductRequest;
 use App\Modules\Warehouse\Requests\UpdateWarehouseProductRequest;
 use App\Modules\Warehouse\Resources\WarehouseProductResource;
+use App\Services\BarcodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class WarehouseProductController
 {
+    public function __construct(
+        private readonly BarcodeService $barcodeService,
+    ) {
+    }
+
     public function index(ListWarehouseProductsRequest $request): AnonymousResourceCollection
     {
         $validated = $request->validated();
@@ -41,6 +47,7 @@ class WarehouseProductController
         $data['status'] = $data['status'] ?? 'active';
         $data['is_fragile'] = $request->boolean('is_fragile');
         $data['requires_packaging'] = $request->boolean('requires_packaging');
+        $data['barcode'] = $data['barcode'] ?? $this->barcodeService->generateWarehouseProductBarcode((int) $data['merchant_id']);
 
         $product = WarehouseProduct::create($data);
 

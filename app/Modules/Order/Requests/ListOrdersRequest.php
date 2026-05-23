@@ -2,6 +2,11 @@
 
 namespace App\Modules\Order\Requests;
 
+use App\Modules\Order\Enums\OrderItemDeliveryStatus;
+use App\Modules\Order\Enums\OrderStatus;
+use App\Modules\Order\Enums\OrderFulfillmentType;
+use App\Modules\Order\Enums\OrderType;
+use App\Modules\Order\Enums\PaymentType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,9 +30,12 @@ class ListOrdersRequest extends FormRequest
                 Rule::exists('merchants', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
             'merchant_name' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'string'],
-            'fulfillment_type' => ['nullable', 'string'],
-            'payment_type' => ['nullable', 'string'],
+            'status' => ['nullable', Rule::in(OrderStatus::values())],
+            'delivery_status' => ['nullable', Rule::in(OrderItemDeliveryStatus::values())],
+            'partially_delivered' => ['nullable', 'boolean'],
+            'order_type' => ['nullable', Rule::in(OrderType::values())],
+            'fulfillment_type' => ['nullable', Rule::in(OrderFulfillmentType::values())],
+            'payment_type' => ['nullable', Rule::in(PaymentType::values())],
             'search' => ['nullable', 'string', 'max:255'],
         ];
     }

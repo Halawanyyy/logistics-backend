@@ -23,6 +23,7 @@ class StoreUserRequest extends FormRequest
             'email' => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6'],
             'role' => ['sometimes', 'string', Rule::in(UserRole::values())],
+            'role_id' => ['nullable', 'integer', Rule::exists('roles', 'id')->whereNull('deleted_at')],
         ];
     }
 }

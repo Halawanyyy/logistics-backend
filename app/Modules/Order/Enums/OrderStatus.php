@@ -8,6 +8,9 @@ class OrderStatus
     public const PENDING_REVIEW = 'pending_review';
     public const CONFIRMED = 'confirmed';
     public const SHIPMENT_CREATED = 'shipment_created';
+    public const PARTIALLY_DELIVERED = 'partially_delivered';
+    public const DELIVERED = 'delivered';
+    public const FAILED = 'failed';
     public const CANCELLED = 'cancelled';
 
     /**
@@ -20,6 +23,9 @@ class OrderStatus
             self::PENDING_REVIEW,
             self::CONFIRMED,
             self::SHIPMENT_CREATED,
+            self::PARTIALLY_DELIVERED,
+            self::DELIVERED,
+            self::FAILED,
             self::CANCELLED,
         ];
     }

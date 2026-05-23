@@ -11,12 +11,22 @@ class DriverCashClosureExpectedAmountService
 {
     public function calculate(Driver $driver, string $date): string
     {
-        $expectedAmount = (float) Shipment::query()
+        $expectedAmount = Shipment::query()
             ->where('assigned_driver_id', $driver->id)
-            ->where('status', ShipmentStatus::DELIVERED)
-            ->whereHas('order', fn ($query) => $query->where('payment_type', PaymentType::COD))
+            ->financiallyCompleted()
             ->whereDate('updated_at', $date)
-            ->sum('cod_amount');
+            ->with([
+                'order:id,payment_type',
+                'order.items:id,order_id,delivered_quantity,unit_price',
+            ])
+            ->get(['id', 'order_id', 'cod_amount', 'shipping_fee'])
+            ->sum(function (Shipment $shipment): float {
+                $deliveredCodAmount = (float) $shipment->delivered_cod_amount;
+
+                return $shipment->order?->payment_type === PaymentType::COD
+                    ? ($deliveredCodAmount > 0 ? $deliveredCodAmount : (float) $shipment->cod_amount)
+                    : 0;
+            });
 
         return number_format($expectedAmount, 2, '.', '');
     }

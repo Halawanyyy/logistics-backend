@@ -28,6 +28,10 @@ class FinanceReportRequest extends FormRequest
                 'nullable',
                 Rule::exists('drivers', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
+            'treasury_account_id' => [
+                'nullable',
+                Rule::exists('treasury_accounts', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
             'status' => ['nullable', 'string', 'max:100'],
         ];
     }

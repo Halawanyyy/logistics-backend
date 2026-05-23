@@ -4,6 +4,7 @@ namespace App\Modules\Warehouse\Requests;
 
 use App\Modules\Warehouse\Enums\WarehouseProductStatus;
 use App\Modules\Warehouse\Models\WarehouseProduct;
+use App\Services\BarcodeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -65,14 +66,12 @@ class UpdateWarehouseProductRequest extends FormRequest
             }
 
             if ($barcode !== null) {
-                $duplicateBarcode = WarehouseProduct::query()
-                    ->where('merchant_id', $merchantId)
-                    ->where('barcode', $barcode)
-                    ->whereKeyNot($product->id)
-                    ->exists();
+                /** @var BarcodeService $barcodeService */
+                $barcodeService = app(BarcodeService::class);
+                $duplicateBarcode = ! $barcodeService->isUnique($barcode, 'warehouse_product', $product->id);
 
                 if ($duplicateBarcode) {
-                    $validator->errors()->add('barcode', 'The barcode has already been taken for this merchant.');
+                    $validator->errors()->add('barcode', 'The barcode has already been taken.');
                 }
             }
         });

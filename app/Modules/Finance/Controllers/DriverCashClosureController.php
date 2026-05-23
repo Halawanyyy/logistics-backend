@@ -13,6 +13,7 @@ use App\Modules\Finance\Resources\DriverCashClosureResource;
 use App\Modules\Finance\Resources\DriverExpectedCashResource;
 use App\Modules\Finance\Services\DriverCashClosureExpectedAmountService;
 use App\Modules\Finance\Services\FinanceSummaryService;
+use App\Modules\Finance\Services\TreasuryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -21,6 +22,7 @@ class DriverCashClosureController
     public function __construct(
         private readonly FinanceSummaryService $financeSummaryService,
         private readonly DriverCashClosureExpectedAmountService $driverCashClosureExpectedAmountService,
+        private readonly TreasuryService $treasuryService,
     ) {
     }
 
@@ -29,11 +31,11 @@ class DriverCashClosureController
         $validated = $request->validated();
 
         $closures = DriverCashClosure::query()
-            ->with(['driver', 'createdBy', 'verifiedBy'])
+            ->with(['driver', 'driverManifest', 'treasuryAccount', 'createdBy', 'verifiedBy'])
             ->when(isset($validated['driver_id']), fn ($query) => $query->where('driver_id', $validated['driver_id']))
             ->when(isset($validated['status']), fn ($query) => $query->where('status', $validated['status']))
-            ->when(isset($validated['date_from']), fn ($query) => $query->whereDate('created_at', '>=', $validated['date_from']))
-            ->when(isset($validated['date_to']), fn ($query) => $query->whereDate('created_at', '<=', $validated['date_to']))
+            ->when(isset($validated['date_from']), fn ($query) => $query->whereDate('closure_date', '>=', $validated['date_from']))
+            ->when(isset($validated['date_to']), fn ($query) => $query->whereDate('closure_date', '<=', $validated['date_to']))
             ->latest()
             ->get();
 
@@ -46,14 +48,16 @@ class DriverCashClosureController
             $this->preparePayload($request->validated(), null, $request->user()?->id)
         );
 
-        return (new DriverCashClosureResource($closure->load(['driver', 'createdBy', 'verifiedBy'])))
+        $this->treasuryService->syncDriverCashClosure($closure, $request->user()?->id);
+
+        return (new DriverCashClosureResource($closure->load(['driver', 'driverManifest', 'treasuryAccount', 'createdBy', 'verifiedBy'])))
             ->response()
             ->setStatusCode(201);
     }
 
     public function show(DriverCashClosure $driverCashClosure): DriverCashClosureResource
     {
-        return new DriverCashClosureResource($driverCashClosure->load(['driver', 'createdBy', 'verifiedBy']));
+        return new DriverCashClosureResource($driverCashClosure->load(['driver', 'driverManifest', 'treasuryAccount', 'createdBy', 'verifiedBy']));
     }
 
     public function generate(GenerateDriverCashClosureRequest $request, Driver $driver): JsonResponse
@@ -64,6 +68,7 @@ class DriverCashClosureController
         $closure = DriverCashClosure::create(
             $this->preparePayload([
                 'driver_id' => $driver->id,
+                'treasury_account_id' => $validated['treasury_account_id'] ?? null,
                 'closure_date' => $validated['date'],
                 'expected_amount' => $expectedAmount,
                 'received_amount' => $validated['received_amount'],
@@ -72,7 +77,9 @@ class DriverCashClosureController
             ], null, $request->user()?->id)
         );
 
-        return (new DriverCashClosureResource($closure->load(['driver', 'createdBy', 'verifiedBy'])))
+        $this->treasuryService->syncDriverCashClosure($closure, $request->user()?->id);
+
+        return (new DriverCashClosureResource($closure->load(['driver', 'driverManifest', 'treasuryAccount', 'createdBy', 'verifiedBy'])))
             ->response()
             ->setStatusCode(201);
     }
@@ -83,7 +90,9 @@ class DriverCashClosureController
             $this->preparePayload($request->validated(), $driverCashClosure, $request->user()?->id)
         );
 
-        return new DriverCashClosureResource($driverCashClosure->fresh()->load(['driver', 'createdBy', 'verifiedBy']));
+        $this->treasuryService->syncDriverCashClosure($driverCashClosure->fresh(), $request->user()?->id);
+
+        return new DriverCashClosureResource($driverCashClosure->fresh()->load(['driver', 'driverManifest', 'treasuryAccount', 'createdBy', 'verifiedBy']));
     }
 
     public function destroy(DriverCashClosure $driverCashClosure): JsonResponse

@@ -6,6 +6,7 @@ use App\Modules\LocationPricing\Models\Area;
 use App\Modules\Order\Enums\OrderFulfillmentType;
 use App\Modules\Order\Enums\OrderSource;
 use App\Modules\Order\Enums\OrderStatus;
+use App\Modules\Order\Enums\OrderType;
 use App\Modules\Order\Enums\PaymentType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -55,6 +56,12 @@ class StoreOrderRequest extends FormRequest
 
             'cod_amount' => ['nullable', 'numeric', 'min:0'],
             'shipping_fee' => ['nullable', 'numeric', 'min:0'],
+            'order_type' => ['nullable', Rule::in(OrderType::values())],
+            'original_order_id' => [
+                'nullable',
+                Rule::exists('orders', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
+            'swap_notes' => ['nullable', 'string'],
             'payment_type' => ['nullable', Rule::in(PaymentType::values())],
 
             'fulfillment_type' => ['nullable', Rule::in(OrderFulfillmentType::values())],
@@ -123,6 +130,22 @@ class StoreOrderRequest extends FormRequest
 
             if (! $pickupAreaBelongsToGovernorate) {
                 $validator->errors()->add('pickup_area_id', 'The selected pickup area does not belong to the selected pickup governorate.');
+            }
+
+            $orderType = $this->input('order_type', OrderType::DELIVERY);
+            $fulfillmentType = $this->input('fulfillment_type');
+            $originalOrderId = $this->input('original_order_id');
+
+            if ($orderType === OrderType::RETURN) {
+                if ($fulfillmentType !== null && $fulfillmentType !== OrderFulfillmentType::PICKUP_FROM_CUSTOMER) {
+                    $validator->errors()->add('fulfillment_type', 'Return orders must use pickup_from_customer fulfillment type.');
+                }
+            } elseif ($fulfillmentType === OrderFulfillmentType::PICKUP_FROM_CUSTOMER) {
+                $validator->errors()->add('fulfillment_type', 'The pickup_from_customer fulfillment type is only allowed for return orders.');
+            }
+
+            if ($originalOrderId !== null && $orderType !== OrderType::SWAP) {
+                $validator->errors()->add('original_order_id', 'The original order id field is only allowed for swap orders.');
             }
         });
     }

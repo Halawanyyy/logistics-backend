@@ -2,14 +2,19 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use App\Modules\MerchantIntegration\Models\MerchantIntegrationToken;
+use App\Modules\LocationPricing\Models\PricingPlan;
+use App\Modules\Finance\Models\MerchantWalletTransaction;
 use App\Modules\Warehouse\Models\WarehouseCharge;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Merchant extends Model
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
 
     /**
      * @var list<string>
@@ -21,6 +26,7 @@ class Merchant extends Model
         'email',
         'address',
         'status',
+        'pricing_plan_id',
     ];
 
     /**
@@ -36,5 +42,20 @@ class Merchant extends Model
     public function warehouseCharges(): HasMany
     {
         return $this->hasMany(WarehouseCharge::class);
+    }
+
+    public function pricingPlan(): BelongsTo
+    {
+        return $this->belongsTo(PricingPlan::class);
+    }
+
+    public function walletTransactions(): HasMany
+    {
+        return $this->hasMany(MerchantWalletTransaction::class);
+    }
+
+    public function integrationTokens(): HasMany
+    {
+        return $this->hasMany(MerchantIntegrationToken::class);
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Modules\Shipment\Requests;
 
+use App\Modules\Order\Enums\OrderType;
+use App\Modules\Shipment\Enums\ShipmentStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,11 +20,13 @@ class ListShipmentsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['nullable', 'string'],
+            'status' => ['nullable', Rule::in(ShipmentStatus::values())],
+            'partially_delivered' => ['nullable', 'boolean'],
             'merchant_id' => [
                 'nullable',
                 Rule::exists('merchants', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
+            'order_type' => ['nullable', Rule::in(OrderType::values())],
             'assigned_driver_id' => [
                 'nullable',
                 Rule::exists('drivers', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),

@@ -10,6 +10,7 @@ use App\Modules\Finance\Resources\FinanceMerchantReportResource;
 use App\Modules\Finance\Resources\FinanceOverviewReportResource;
 use App\Modules\Finance\Resources\FinancePayoutsReportResource;
 use App\Modules\Finance\Services\FinanceReportService;
+use Illuminate\Http\JsonResponse;
 
 class FinanceReportsController
 {
@@ -51,5 +52,40 @@ class FinanceReportsController
         return new FinancePayoutsReportResource(
             $this->financeReportService->getPayoutsReport($request->validated())
         );
+    }
+
+    public function dailyCash(FinanceReportRequest $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->financeReportService->getDailyCashReport($request->validated()),
+        ]);
+    }
+
+    public function merchantLedger(FinanceReportRequest $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->financeReportService->getMerchantLedgerReport($request->validated()),
+        ]);
+    }
+
+    public function driverDiscrepancies(FinanceReportRequest $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->financeReportService->getDriverDiscrepanciesReport($request->validated()),
+        ]);
+    }
+
+    public function warehouseRevenue(FinanceReportRequest $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->financeReportService->getWarehouseRevenueReport($request->validated()),
+        ]);
+    }
+
+    public function profitLoss(FinanceReportRequest $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->financeReportService->getProfitLossReport($request->validated()),
+        ]);
     }
 }

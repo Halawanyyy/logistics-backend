@@ -2,17 +2,24 @@
 
 namespace App\Modules\Warehouse\Services;
 
+use App\Modules\Finance\Services\MerchantWalletService;
 use App\Modules\Warehouse\Enums\WarehouseChargeStatus;
 use App\Modules\Warehouse\Models\WarehouseCharge;
 
 class WarehouseChargeService
 {
+    public function __construct(
+        private readonly MerchantWalletService $merchantWalletService,
+    ) {
+    }
+
     public function store(array $data, ?int $userId): WarehouseCharge
     {
         $payload = $this->buildPayload($data);
         $payload['created_by'] = $userId;
 
         $charge = WarehouseCharge::create($payload);
+        $this->merchantWalletService->syncWarehouseChargeTransaction($charge, $userId);
 
         return $charge->load($this->relations());
     }
@@ -20,6 +27,7 @@ class WarehouseChargeService
     public function update(WarehouseCharge $warehouseCharge, array $data): WarehouseCharge
     {
         $warehouseCharge->update($this->buildPayload($data, $warehouseCharge));
+        $this->merchantWalletService->syncWarehouseChargeTransaction($warehouseCharge->fresh(), null);
 
         return $warehouseCharge->fresh()->load($this->relations());
     }

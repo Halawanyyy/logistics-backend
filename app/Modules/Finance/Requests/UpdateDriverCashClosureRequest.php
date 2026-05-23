@@ -19,6 +19,11 @@ class UpdateDriverCashClosureRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'treasury_account_id' => [
+                'sometimes',
+                'nullable',
+                Rule::exists('treasury_accounts', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
             'expected_amount' => ['sometimes', 'numeric', 'min:0'],
             'received_amount' => ['sometimes', 'numeric', 'min:0'],
             'status' => ['sometimes', Rule::in(DriverCashClosureStatus::values())],

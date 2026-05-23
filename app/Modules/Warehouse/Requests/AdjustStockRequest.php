@@ -27,6 +27,10 @@ class AdjustStockRequest extends FormRequest
                 'required',
                 Rule::exists('warehouse_products', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
+            'warehouse_bin_id' => [
+                'nullable',
+                Rule::exists('warehouse_bins', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
             'type' => ['required', Rule::in(StockMovementType::values())],
             'quantity' => ['required', 'integer', 'min:1'],
             'notes' => ['nullable', 'string'],

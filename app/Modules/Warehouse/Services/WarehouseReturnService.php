@@ -2,6 +2,9 @@
 
 namespace App\Modules\Warehouse\Services;
 
+use App\Modules\Audit\Enums\AuditEventType;
+use App\Modules\Audit\Services\AuditLogService;
+use App\Modules\Settings\Services\SystemSettingService;
 use App\Modules\Warehouse\Enums\StockMovementType;
 use App\Modules\Warehouse\Enums\WarehouseReturnCondition;
 use App\Modules\Warehouse\Models\InventoryStock;
@@ -11,9 +14,22 @@ use Illuminate\Support\Facades\DB;
 
 class WarehouseReturnService
 {
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+        private readonly SystemSettingService $systemSettingService,
+    ) {
+    }
+
     public function store(array $data, ?int $userId): WarehouseReturn
     {
         return DB::transaction(function () use ($data, $userId) {
+            $condition = $data['condition']
+                ?? (string) $this->systemSettingService->get('default_return_condition', WarehouseReturnCondition::SELLABLE);
+            $condition = in_array($condition, WarehouseReturnCondition::values(), true)
+                ? $condition
+                : WarehouseReturnCondition::SELLABLE;
+            $autoRestoreSellableReturns = (bool) $this->systemSettingService->get('auto_restore_sellable_returns', true);
+
             $stock = InventoryStock::query()
                 ->lockForUpdate()
                 ->firstOrCreate(
@@ -37,10 +53,10 @@ class WarehouseReturnService
             $afterDamaged = $beforeDamaged;
             $movementType = StockMovementType::ADJUSTMENT;
 
-            if ($data['condition'] === WarehouseReturnCondition::SELLABLE) {
+            if ($condition === WarehouseReturnCondition::SELLABLE && $autoRestoreSellableReturns) {
                 $afterAvailable += (int) $data['quantity'];
                 $movementType = StockMovementType::IN;
-            } elseif ($data['condition'] === WarehouseReturnCondition::DAMAGED) {
+            } elseif ($condition === WarehouseReturnCondition::DAMAGED) {
                 $afterDamaged += (int) $data['quantity'];
                 $movementType = StockMovementType::DAMAGED;
             }
@@ -57,7 +73,7 @@ class WarehouseReturnService
                 'warehouse_id' => $data['warehouse_id'],
                 'warehouse_product_id' => $data['warehouse_product_id'],
                 'quantity' => $data['quantity'],
-                'condition' => $data['condition'],
+                'condition' => $condition,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $userId,
             ]);
@@ -78,6 +94,27 @@ class WarehouseReturnService
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $userId,
             ]);
+
+            $this->auditLogService->log(
+                AuditEventType::WAREHOUSE_RETURN_CREATED,
+                'created',
+                'warehouse_product',
+                (int) $data['warehouse_product_id'],
+                [
+                    'user_id' => $userId,
+                    'new_values' => [
+                        'quantity' => $data['quantity'],
+                        'condition' => $condition,
+                    ],
+                    'metadata' => [
+                        'warehouse_return_id' => $warehouseReturn->id,
+                        'warehouse_id' => $data['warehouse_id'],
+                        'order_id' => $data['order_id'] ?? null,
+                        'shipment_id' => $data['shipment_id'] ?? null,
+                    ],
+                    'notes' => $data['notes'] ?? null,
+                ],
+            );
 
             return $warehouseReturn->load([
                 'warehouse',

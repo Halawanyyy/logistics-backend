@@ -3,6 +3,7 @@
 namespace App\Modules\Order\Models;
 
 use App\Modules\Warehouse\Models\OrderStockReservation;
+use App\Modules\Shipment\Models\ShipmentItemResult;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,6 +18,10 @@ class OrderItem extends Model
         'product_name',
         'sku',
         'quantity',
+        'delivery_status',
+        'delivered_quantity',
+        'returned_quantity',
+        'damaged_quantity',
         'unit_price',
         'weight',
         'notes',
@@ -28,6 +33,10 @@ class OrderItem extends Model
     protected function casts(): array
     {
         return [
+            'quantity' => 'integer',
+            'delivered_quantity' => 'integer',
+            'returned_quantity' => 'integer',
+            'damaged_quantity' => 'integer',
             'unit_price' => 'decimal:2',
             'weight' => 'decimal:2',
         ];
@@ -41,5 +50,10 @@ class OrderItem extends Model
     public function stockReservations(): HasMany
     {
         return $this->hasMany(OrderStockReservation::class);
+    }
+
+    public function shipmentItemResults(): HasMany
+    {
+        return $this->hasMany(ShipmentItemResult::class);
     }
 }

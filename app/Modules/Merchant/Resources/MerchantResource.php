@@ -20,6 +20,9 @@ class MerchantResource extends JsonResource
             'email' => $this->email,
             'address' => $this->address,
             'status' => $this->status,
+            'pricing_plan_id' => $this->pricing_plan_id,
+            'pricing_plan_name' => $this->whenLoaded('pricingPlan', fn () => $this->pricingPlan?->name),
+            'pricing_plan_code' => $this->whenLoaded('pricingPlan', fn () => $this->pricingPlan?->code),
             'created_at' => $this->created_at,
         ];
     }

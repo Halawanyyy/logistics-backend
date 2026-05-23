@@ -6,6 +6,7 @@ use App\Modules\LocationPricing\Models\Area;
 use App\Modules\Order\Enums\OrderFulfillmentType;
 use App\Modules\Order\Enums\OrderSource;
 use App\Modules\Order\Enums\OrderStatus;
+use App\Modules\Order\Enums\OrderType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -57,6 +58,13 @@ class UpdateOrderRequest extends FormRequest
 
             'cod_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'shipping_fee' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'order_type' => ['sometimes', Rule::in(OrderType::values())],
+            'original_order_id' => [
+                'sometimes',
+                'nullable',
+                Rule::exists('orders', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
+            'swap_notes' => ['sometimes', 'nullable', 'string'],
 
             'fulfillment_type' => ['sometimes', Rule::in(OrderFulfillmentType::values())],
             'is_fragile' => ['sometimes', 'boolean'],
@@ -125,6 +133,26 @@ class UpdateOrderRequest extends FormRequest
 
             if (! $pickupAreaBelongsToGovernorate) {
                 $validator->errors()->add('pickup_area_id', 'The selected pickup area does not belong to the selected pickup governorate.');
+            }
+
+            $finalOrderType = $this->input('order_type', $order->order_type);
+            $finalFulfillmentType = $this->has('fulfillment_type') ? $this->input('fulfillment_type') : $order->fulfillment_type;
+            $finalOriginalOrderId = $this->has('original_order_id') ? $this->input('original_order_id') : $order->original_order_id;
+
+            if ($finalOrderType === OrderType::RETURN && $finalFulfillmentType !== OrderFulfillmentType::PICKUP_FROM_CUSTOMER) {
+                $validator->errors()->add('fulfillment_type', 'Return orders must use pickup_from_customer fulfillment type.');
+            }
+
+            if ($finalOrderType !== OrderType::RETURN && $finalFulfillmentType === OrderFulfillmentType::PICKUP_FROM_CUSTOMER) {
+                $validator->errors()->add('fulfillment_type', 'The pickup_from_customer fulfillment type is only allowed for return orders.');
+            }
+
+            if ($finalOriginalOrderId !== null && $finalOrderType !== OrderType::SWAP) {
+                $validator->errors()->add('original_order_id', 'The original order id field is only allowed for swap orders.');
+            }
+
+            if ($finalOriginalOrderId !== null && (int) $finalOriginalOrderId === (int) $order->id) {
+                $validator->errors()->add('original_order_id', 'The original order id field cannot reference the same order.');
             }
         });
     }

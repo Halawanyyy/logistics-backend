@@ -4,7 +4,6 @@ namespace App\Modules\Finance\Controllers;
 
 use App\Models\Merchant;
 use App\Modules\Finance\Actions\CreateMerchantInvoiceAction;
-use App\Modules\Finance\Enums\MerchantInvoiceStatus;
 use App\Modules\Finance\Models\MerchantInvoice;
 use App\Modules\Finance\Requests\InvoiceDownloadRequest;
 use App\Modules\Finance\Requests\InvoicePreviewRequest;
@@ -19,7 +18,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 
 class MerchantInvoiceController
 {
@@ -58,19 +56,19 @@ class MerchantInvoiceController
 
     public function show(MerchantInvoice $merchantInvoice): MerchantInvoiceResource
     {
-        return new MerchantInvoiceResource($merchantInvoice->load(['merchant', 'createdBy']));
+        return new MerchantInvoiceResource($merchantInvoice->load(['merchant', 'createdBy', 'items']));
     }
 
     public function preview(InvoicePreviewRequest $request, MerchantInvoice $merchantInvoice): MerchantInvoicePreviewResource
     {
         return new MerchantInvoicePreviewResource(
-            $this->financeSummaryService->getMerchantInvoicePreview($merchantInvoice->load('merchant'))
+            $this->financeSummaryService->getMerchantInvoicePreview($merchantInvoice->load(['merchant', 'items']))
         );
     }
 
     public function download(InvoiceDownloadRequest $request, MerchantInvoice $merchantInvoice)
     {
-        $merchantInvoice->load('merchant');
+        $merchantInvoice->load(['merchant', 'items']);
         $path = $merchantInvoice->file_path;
 
         if ($path === null || ! Storage::disk('local')->exists($path)) {
@@ -100,38 +98,14 @@ class MerchantInvoiceController
 
     public function update(UpdateMerchantInvoiceRequest $request, MerchantInvoice $merchantInvoice): MerchantInvoiceResource
     {
-        $merchantInvoice = DB::transaction(function () use ($request, $merchantInvoice) {
-            $validated = $request->validated();
-            $merchant = $merchantInvoice->merchant()->firstOrFail();
+        $merchant = $merchantInvoice->merchant()->firstOrFail();
+        $invoice = $this->createMerchantInvoiceAction->refresh(
+            $merchantInvoice,
+            $merchant,
+            $request->validated()
+        );
 
-            $periodStart = $validated['period_start'] ?? $merchantInvoice->period_start?->format('Y-m-d');
-            $periodEnd = $validated['period_end'] ?? $merchantInvoice->period_end?->format('Y-m-d');
-
-            $totals = $this->financeSummaryService->calculateMerchantInvoiceTotals($merchant, [
-                'date_from' => $periodStart,
-                'date_to' => $periodEnd,
-            ]);
-
-            $status = $validated['status'] ?? $merchantInvoice->status;
-
-            $merchantInvoice->update([
-                'period_start' => $periodStart,
-                'period_end' => $periodEnd,
-                'total_cod' => $totals['total_cod'],
-                'total_shipping_fees' => $totals['total_shipping_fees'],
-                'total_warehouse_charges' => $totals['total_warehouse_charges'],
-                'total_payable' => $totals['total_payable'],
-                'status' => $status,
-                'notes' => $validated['notes'] ?? $merchantInvoice->notes,
-                'issued_at' => $status === MerchantInvoiceStatus::ISSUED && $merchantInvoice->issued_at === null
-                    ? now()
-                    : $merchantInvoice->issued_at,
-            ]);
-
-            return $merchantInvoice->fresh()->load(['merchant', 'createdBy']);
-        });
-
-        return new MerchantInvoiceResource($merchantInvoice);
+        return new MerchantInvoiceResource($invoice);
     }
 
     public function destroy(MerchantInvoice $merchantInvoice): JsonResponse

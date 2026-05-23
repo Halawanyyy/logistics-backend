@@ -20,9 +20,20 @@ class MerchantController
     ) {
     }
 
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        $merchants = Merchant::query()->latest()->get();
+        $validated = $request->validate([
+            'pricing_plan_id' => [
+                'nullable',
+                Rule::exists('pricing_plans', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
+        ]);
+
+        $merchants = Merchant::query()
+            ->with('pricingPlan')
+            ->when(isset($validated['pricing_plan_id']), fn ($query) => $query->where('pricing_plan_id', $validated['pricing_plan_id']))
+            ->latest()
+            ->get();
 
         return MerchantResource::collection($merchants);
     }
@@ -36,23 +47,24 @@ class MerchantController
             'email' => $request->input('email'),
             'address' => $request->input('address'),
             'status' => $request->input('status', 'active'),
+            'pricing_plan_id' => $request->input('pricing_plan_id'),
         ]);
 
-        return (new MerchantResource($merchant))
+        return (new MerchantResource($merchant->load('pricingPlan')))
             ->response()
             ->setStatusCode(201);
     }
 
     public function show(Merchant $merchant): MerchantResource
     {
-        return new MerchantResource($merchant);
+        return new MerchantResource($merchant->load('pricingPlan'));
     }
 
     public function update(UpdateMerchantRequest $request, Merchant $merchant): MerchantResource
     {
         $merchant->update($request->validated());
 
-        return new MerchantResource($merchant->fresh());
+        return new MerchantResource($merchant->fresh()->load('pricingPlan'));
     }
 
     public function destroy(Merchant $merchant): JsonResponse

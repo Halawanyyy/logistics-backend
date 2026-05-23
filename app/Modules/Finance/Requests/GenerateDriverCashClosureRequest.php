@@ -20,6 +20,10 @@ class GenerateDriverCashClosureRequest extends FormRequest
     {
         return [
             'date' => ['required', 'date'],
+            'treasury_account_id' => [
+                'nullable',
+                Rule::exists('treasury_accounts', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
             'received_amount' => ['required', 'numeric', 'min:0'],
             'status' => ['nullable', Rule::in(DriverCashClosureStatus::values())],
             'notes' => ['nullable', 'string'],

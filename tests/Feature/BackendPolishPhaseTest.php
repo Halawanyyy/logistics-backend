@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Merchant;
-use App\Models\User;
 use App\Modules\Driver\Models\Driver;
 use App\Modules\Finance\Enums\DriverCashClosureStatus;
 use App\Modules\Finance\Models\DriverCashClosure;
@@ -16,17 +15,24 @@ use App\Modules\Order\Models\Order;
 use App\Modules\Shipment\Enums\ShipmentStatus;
 use App\Modules\Shipment\Models\Shipment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
+use Tests\Feature\Concerns\InteractsWithPlatform;
 use Tests\TestCase;
 
 class BackendPolishPhaseTest extends TestCase
 {
+    use InteractsWithPlatform;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seedPlatform();
+        $this->actingAsSuperAdmin();
+    }
 
     public function test_order_show_includes_shipment_summary_and_hides_detailed_stock_reservations(): void
     {
-        Sanctum::actingAs(User::factory()->create());
-
         [$merchant, $governorate, $area] = $this->createLocationContext();
         $order = $this->createOrder($merchant, $governorate, $area, [
             'status' => OrderStatus::SHIPMENT_CREATED,
@@ -62,8 +68,6 @@ class BackendPolishPhaseTest extends TestCase
 
     public function test_shipment_creation_updates_order_status_and_locks_order_changes(): void
     {
-        Sanctum::actingAs(User::factory()->create());
-
         [$merchant, $governorate, $area] = $this->createLocationContext();
         $order = $this->createOrder($merchant, $governorate, $area, [
             'status' => OrderStatus::CONFIRMED,
@@ -90,8 +94,6 @@ class BackendPolishPhaseTest extends TestCase
 
     public function test_orders_index_supports_frontend_filters(): void
     {
-        Sanctum::actingAs(User::factory()->create());
-
         [$merchantA, $governorate, $area] = $this->createLocationContext('Alex', 'Smouha', 'Merchant Alpha');
         $merchantB = Merchant::create([
             'name' => 'Merchant Beta',
@@ -128,8 +130,6 @@ class BackendPolishPhaseTest extends TestCase
 
     public function test_areas_can_be_filtered_by_governorate(): void
     {
-        Sanctum::actingAs(User::factory()->create());
-
         $governorateA = Governorate::create(['name' => 'Cairo']);
         $governorateB = Governorate::create(['name' => 'Giza']);
         $matchingArea = Area::create(['governorate_id' => $governorateA->id, 'name' => 'Nasr City']);
@@ -143,8 +143,6 @@ class BackendPolishPhaseTest extends TestCase
 
     public function test_shipments_print_list_returns_filtered_summary_payload(): void
     {
-        Sanctum::actingAs(User::factory()->create());
-
         [$merchant, $governorate, $area] = $this->createLocationContext();
         $driver = Driver::create([
             'name' => 'Driver One',
@@ -192,8 +190,7 @@ class BackendPolishPhaseTest extends TestCase
 
     public function test_driver_cash_closure_generate_calculates_expected_amount_and_verification_fields(): void
     {
-        $user = User::factory()->create();
-        Sanctum::actingAs($user);
+        $user = $this->actingAsSuperAdmin();
 
         [$merchant, $governorate, $area] = $this->createLocationContext();
         $driver = Driver::create([

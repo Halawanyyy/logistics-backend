@@ -61,11 +61,15 @@ class DriverController
         $shipments = $driver->shipments()
             ->with([
                 'merchant',
+                'order',
+                'order.items',
                 'deliveryGovernorate',
                 'deliveryArea',
                 'assignedDriver',
                 'histories',
                 'histories.changedBy',
+                'itemResults',
+                'itemResults.orderItem',
             ])
             ->latest()
             ->get();
@@ -86,6 +90,9 @@ class DriverController
                 'deliveryGovernorate',
                 'deliveryArea',
                 'order',
+                'order.items',
+                'itemResults',
+                'itemResults.orderItem',
             ])
             ->when(isset($validated['status']), fn ($query) => $query->where('status', $validated['status']))
             ->when(isset($validated['date']), fn ($query) => $query->whereDate('created_at', $validated['date']))

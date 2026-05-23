@@ -4,6 +4,7 @@ namespace App\Modules\UserManagement\Enums;
 
 class UserRole
 {
+    public const SUPER_ADMIN = 'super_admin';
     public const ADMIN = 'admin';
     public const STAFF = 'staff';
     public const WAREHOUSE = 'warehouse';
@@ -16,6 +17,7 @@ class UserRole
     public static function values(): array
     {
         return [
+            self::SUPER_ADMIN,
             self::ADMIN,
             self::STAFF,
             self::WAREHOUSE,

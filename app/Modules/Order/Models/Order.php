@@ -4,6 +4,7 @@ namespace App\Modules\Order\Models;
 
 use App\Models\Merchant;
 use App\Models\User;
+use App\Traits\Auditable;
 use App\Modules\LocationPricing\Models\Area;
 use App\Modules\LocationPricing\Models\Governorate;
 use App\Modules\Shipment\Models\Shipment;
@@ -16,7 +17,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
+
+    /**
+     * @var list<string>
+     */
+    protected array $auditExcluded = ['barcode'];
 
     /**
      * @var list<string>
@@ -24,6 +30,7 @@ class Order extends Model
     protected $fillable = [
         'merchant_id',
         'order_number',
+        'barcode',
         'customer_name',
         'customer_phone',
         'customer_phone_alt',
@@ -37,6 +44,8 @@ class Order extends Model
         'pickup_notes',
         'cod_amount',
         'shipping_fee',
+        'order_type',
+        'original_order_id',
         'payment_type',
         'fulfillment_type',
         'is_fragile',
@@ -51,6 +60,7 @@ class Order extends Model
         'review_reason',
         'status',
         'notes',
+        'swap_notes',
         'created_by',
     ];
 
@@ -110,6 +120,16 @@ class Order extends Model
         return $this->hasOne(Shipment::class);
     }
 
+    public function originalOrder(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'original_order_id');
+    }
+
+    public function swapOrders(): HasMany
+    {
+        return $this->hasMany(self::class, 'original_order_id');
+    }
+
     public function stockReservations(): HasMany
     {
         return $this->hasMany(OrderStockReservation::class);
@@ -118,5 +138,16 @@ class Order extends Model
     public function latestStockReservation(): HasOne
     {
         return $this->hasOne(OrderStockReservation::class)->latestOfMany();
+    }
+
+    public function getDeliveredCodAmountAttribute(): string
+    {
+        $items = $this->relationLoaded('items')
+            ? $this->items
+            : $this->items()->get(['order_id', 'delivered_quantity', 'unit_price']);
+
+        $amount = $items->sum(fn (OrderItem $item): float => (float) $item->unit_price * (int) $item->delivered_quantity);
+
+        return number_format($amount, 2, '.', '');
     }
 }

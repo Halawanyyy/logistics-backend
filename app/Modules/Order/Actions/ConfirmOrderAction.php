@@ -2,12 +2,19 @@
 
 namespace App\Modules\Order\Actions;
 
+use App\Modules\Audit\Enums\AuditEventType;
+use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Models\Order;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
 class ConfirmOrderAction
 {
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
+
     public function execute(Order $order): Order
     {
         if ($order->status === OrderStatus::CONFIRMED) {
@@ -30,9 +37,22 @@ class ConfirmOrderAction
             $this->fail('Order must have at least one item before confirmation.');
         }
 
+        $oldStatus = $order->status;
+
         $order->update([
             'status' => OrderStatus::CONFIRMED,
         ]);
+
+        $this->auditLogService->logStatusChange(
+            $order->fresh(),
+            AuditEventType::ORDER_CONFIRMED,
+            $oldStatus,
+            OrderStatus::CONFIRMED,
+            [],
+            'Order confirmed.',
+            null,
+            'confirmed',
+        );
 
         return $order->fresh();
     }

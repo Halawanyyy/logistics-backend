@@ -13,10 +13,20 @@ class InventoryStock extends Model
     protected $fillable = [
         'warehouse_id',
         'warehouse_product_id',
+        'warehouse_bin_id',
         'quantity_available',
         'quantity_reserved',
         'quantity_damaged',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'quantity_available' => 'integer',
+            'quantity_reserved' => 'integer',
+            'quantity_damaged' => 'integer',
+        ];
+    }
 
     public function warehouse(): BelongsTo
     {
@@ -26,5 +36,10 @@ class InventoryStock extends Model
     public function warehouseProduct(): BelongsTo
     {
         return $this->belongsTo(WarehouseProduct::class);
+    }
+
+    public function warehouseBin(): BelongsTo
+    {
+        return $this->belongsTo(WarehouseBin::class);
     }
 }

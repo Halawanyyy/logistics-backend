@@ -2,11 +2,15 @@
 
 namespace App\Modules\Order\Controllers;
 
+use App\Modules\Audit\Enums\AuditEventType;
+use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Order\Actions\ConfirmOrderAction;
+use App\Modules\Order\Actions\CreateOrderAction;
 use App\Modules\Order\Actions\GenerateOrderNumberAction;
 use App\Modules\Order\Enums\OrderFulfillmentType;
 use App\Modules\Order\Enums\OrderSource;
 use App\Modules\Order\Enums\OrderStatus;
+use App\Modules\Order\Enums\OrderType;
 use App\Modules\Order\Enums\PaymentType;
 use App\Modules\Order\Models\Order;
 use App\Modules\Order\Requests\ListOrdersRequest;
@@ -14,6 +18,8 @@ use App\Modules\Order\Requests\StoreOrderRequest;
 use App\Modules\Order\Requests\UpdateOrderRequest;
 use App\Modules\Order\Resources\OrderResource;
 use App\Modules\Order\Services\OrderShippingFeeService;
+use App\Modules\Settings\Services\SystemSettingService;
+use App\Services\BarcodeService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,9 +30,13 @@ use Illuminate\Support\Facades\DB;
 class OrderController
 {
     public function __construct(
+        private readonly AuditLogService $auditLogService,
         private readonly ConfirmOrderAction $confirmOrderAction,
+        private readonly CreateOrderAction $createOrderAction,
         private readonly GenerateOrderNumberAction $generateOrderNumberAction,
         private readonly OrderShippingFeeService $orderShippingFeeService,
+        private readonly SystemSettingService $systemSettingService,
+        private readonly BarcodeService $barcodeService,
     ) {
     }
 
@@ -43,6 +53,9 @@ class OrderController
                 $merchantQuery->where('name', 'like', '%'.$validated['merchant_name'].'%');
             }))
             ->when(isset($validated['status']), fn ($query) => $query->where('status', $validated['status']))
+            ->when(($validated['partially_delivered'] ?? false) === true, fn ($query) => $query->where('status', OrderStatus::PARTIALLY_DELIVERED))
+            ->when(isset($validated['delivery_status']), fn ($query) => $query->whereHas('items', fn ($itemQuery) => $itemQuery->where('delivery_status', $validated['delivery_status'])))
+            ->when(isset($validated['order_type']), fn ($query) => $query->where('order_type', $validated['order_type']))
             ->when(isset($validated['fulfillment_type']), fn ($query) => $query->where('fulfillment_type', $validated['fulfillment_type']))
             ->when(isset($validated['payment_type']), fn ($query) => $query->where('payment_type', $validated['payment_type']))
             ->when(isset($validated['search']), function ($query) use ($validated) {
@@ -63,19 +76,10 @@ class OrderController
 
     public function store(StoreOrderRequest $request): JsonResponse
     {
-        $order = DB::transaction(function () use ($request) {
-            $validated = $request->validated();
-            $orderData = $this->buildOrderAttributes($request, $validated, true);
-            $orderData['order_number'] = $this->generateOrderNumberAction->execute();
-            $orderData['created_by'] = $request->user()?->id;
-
-            $this->applyShippingFeeOnCreate($request, $orderData);
-
-            $order = Order::create($orderData);
-            $order->items()->createMany($this->buildItemsPayload($validated['items']));
-
-            return $order->load($this->relations());
-        });
+        $order = $this->createOrderAction->execute(
+            $request->validated(),
+            $request->user()?->id,
+        );
 
         return (new OrderResource($order))
             ->response()
@@ -89,7 +93,12 @@ class OrderController
 
     public function update(UpdateOrderRequest $request, Order $order): OrderResource
     {
-        $this->ensureOrderCanBeModified($order, 'Order cannot be edited after shipment has been created.');
+        $this->ensureOrderCanBeModified(
+            $order,
+            'allow_order_edit_after_shipment',
+            'Order cannot be edited after shipment has been created.'
+        );
+        $oldStatus = $order->status;
 
         $order = DB::transaction(function () use ($request, $order) {
             $validated = $request->validated();
@@ -105,6 +114,19 @@ class OrderController
             return $order->fresh()->load($this->relations());
         });
 
+        if ($oldStatus !== $order->status && $order->status === OrderStatus::CANCELLED) {
+            $this->auditLogService->logStatusChange(
+                $order,
+                AuditEventType::ORDER_CANCELLED,
+                $oldStatus,
+                $order->status,
+                [],
+                'Order cancelled.',
+                null,
+                'cancelled',
+            );
+        }
+
         return new OrderResource($order);
     }
 
@@ -117,7 +139,11 @@ class OrderController
 
     public function destroy(Order $order): JsonResponse
     {
-        $this->ensureOrderCanBeModified($order, 'Order cannot be deleted after shipment has been created.');
+        $this->ensureOrderCanBeModified(
+            $order,
+            'allow_order_delete_after_shipment',
+            'Order cannot be deleted after shipment has been created.'
+        );
 
         $order->delete();
 
@@ -147,6 +173,9 @@ class OrderController
             'pickup_notes',
             'cod_amount',
             'shipping_fee',
+            'order_type',
+            'original_order_id',
+            'swap_notes',
             'payment_type',
             'fulfillment_type',
             'is_fragile',
@@ -169,8 +198,14 @@ class OrderController
             }
         }
 
+        if ($applyDefaults && ! Arr::exists($attributes, 'order_type')) {
+            $attributes['order_type'] = OrderType::DELIVERY;
+        }
+
         if ($applyDefaults && ! Arr::exists($attributes, 'fulfillment_type')) {
-            $attributes['fulfillment_type'] = OrderFulfillmentType::PICKUP_FROM_MERCHANT;
+            $attributes['fulfillment_type'] = ($attributes['order_type'] ?? OrderType::DELIVERY) === OrderType::RETURN
+                ? OrderFulfillmentType::PICKUP_FROM_CUSTOMER
+                : OrderFulfillmentType::PICKUP_FROM_MERCHANT;
         }
 
         if ($applyDefaults && ! Arr::exists($attributes, 'source')) {
@@ -178,7 +213,10 @@ class OrderController
         }
 
         if ($applyDefaults && ! Arr::exists($attributes, 'status')) {
-            $attributes['status'] = OrderStatus::DRAFT;
+            $configuredStatus = (string) $this->systemSettingService->get('default_order_status', OrderStatus::DRAFT);
+            $attributes['status'] = in_array($configuredStatus, OrderStatus::values(), true)
+                ? $configuredStatus
+                : OrderStatus::DRAFT;
         }
 
         if ($applyDefaults && ! Arr::exists($attributes, 'payment_type')) {
@@ -205,49 +243,6 @@ class OrderController
     }
 
     /**
-     * @param array<string, mixed> $orderData
-     */
-    private function applyShippingFeeOnCreate(Request $request, array &$orderData): void
-    {
-        if ($request->filled('shipping_fee')) {
-            return;
-        }
-
-        $resolvedShipping = $this->orderShippingFeeService->resolve(
-            (int) $orderData['delivery_governorate_id'],
-            isset($orderData['delivery_area_id']) ? (int) $orderData['delivery_area_id'] : null,
-        );
-
-        $orderData['shipping_fee'] = $resolvedShipping['shipping_fee'];
-
-        if ($resolvedShipping['source'] !== null) {
-            return;
-        }
-
-        $orderData['requires_review'] = true;
-        $orderData['review_reason'] = 'Shipping rate not found for delivery location';
-        $orderData['status'] = OrderStatus::PENDING_REVIEW;
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $items
-     * @return array<int, array<string, mixed>>
-     */
-    private function buildItemsPayload(array $items): array
-    {
-        return array_map(function (array $item): array {
-            return [
-                'product_name' => $item['product_name'],
-                'sku' => $item['sku'] ?? null,
-                'quantity' => $item['quantity'],
-                'unit_price' => $item['unit_price'] ?? '0.00',
-                'weight' => $item['weight'] ?? null,
-                'notes' => $item['notes'] ?? null,
-            ];
-        }, $items);
-    }
-
-    /**
      * @return list<string>
      */
     private function relations(): array
@@ -256,15 +251,18 @@ class OrderController
             'merchant',
             'deliveryGovernorate',
             'deliveryArea',
+            'originalOrder',
             'shipment',
             'latestStockReservation',
             'items',
         ];
     }
 
-    private function ensureOrderCanBeModified(Order $order, string $message): void
+    private function ensureOrderCanBeModified(Order $order, string $settingKey, string $message): void
     {
-        if ($order->shipment()->exists()) {
+        $allowAfterShipment = (bool) $this->systemSettingService->get($settingKey, false);
+
+        if (! $allowAfterShipment && $order->shipment()->exists()) {
             throw new HttpResponseException(response()->json([
                 'message' => $message,
             ], 422));

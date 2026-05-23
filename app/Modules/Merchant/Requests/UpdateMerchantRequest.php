@@ -27,6 +27,10 @@ class UpdateMerchantRequest extends FormRequest
             'email' => ['nullable', 'email', Rule::unique('merchants', 'email')->ignore($merchantId)],
             'address' => ['nullable', 'string'],
             'status' => ['nullable', 'string', Rule::in(['active', 'inactive'])],
+            'pricing_plan_id' => [
+                'nullable',
+                Rule::exists('pricing_plans', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
         ];
     }
 }

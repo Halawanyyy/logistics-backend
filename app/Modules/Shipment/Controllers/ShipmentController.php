@@ -8,11 +8,14 @@ use App\Modules\Shipment\Actions\AssignDriverToShipmentAction;
 use App\Modules\Shipment\Actions\CreateShipmentFromOrderAction;
 use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Shipment\Requests\AssignDriverRequest;
+use App\Modules\Shipment\Requests\CompleteShipmentDeliveryRequest;
 use App\Modules\Shipment\Requests\ListShipmentsRequest;
 use App\Modules\Shipment\Requests\PrintShipmentListRequest;
 use App\Modules\Shipment\Requests\UpdateShipmentStatusRequest;
 use App\Modules\Shipment\Resources\ShipmentResource;
+use App\Modules\Shipment\Services\ShipmentDeliveryCompletionService;
 use App\Modules\Shipment\Services\ShipmentPrintListService;
+use App\Modules\Shipment\Services\ShipmentStatusUpdateService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -23,7 +26,9 @@ class ShipmentController
     public function __construct(
         private readonly AssignDriverToShipmentAction $assignDriverToShipmentAction,
         private readonly CreateShipmentFromOrderAction $createShipmentFromOrderAction,
+        private readonly ShipmentDeliveryCompletionService $shipmentDeliveryCompletionService,
         private readonly ShipmentPrintListService $shipmentPrintListService,
+        private readonly ShipmentStatusUpdateService $shipmentStatusUpdateService,
     ) {
     }
 
@@ -34,7 +39,9 @@ class ShipmentController
         $shipments = Shipment::query()
             ->with($this->relations())
             ->when(isset($validated['status']), fn ($query) => $query->where('status', $validated['status']))
+            ->when(($validated['partially_delivered'] ?? false) === true, fn ($query) => $query->where('status', \App\Modules\Shipment\Enums\ShipmentStatus::PARTIALLY_DELIVERED))
             ->when(isset($validated['merchant_id']), fn ($query) => $query->where('merchant_id', $validated['merchant_id']))
+            ->when(isset($validated['order_type']), fn ($query) => $query->whereHas('order', fn ($orderQuery) => $orderQuery->where('order_type', $validated['order_type'])))
             ->when(isset($validated['assigned_driver_id']), fn ($query) => $query->where('assigned_driver_id', $validated['assigned_driver_id']))
             ->when(isset($validated['delivery_governorate_id']), fn ($query) => $query->where('delivery_governorate_id', $validated['delivery_governorate_id']))
             ->when(isset($validated['delivery_area_id']), fn ($query) => $query->where('delivery_area_id', $validated['delivery_area_id']))
@@ -59,6 +66,17 @@ class ShipmentController
     public function show(Shipment $shipment): ShipmentResource
     {
         return new ShipmentResource($shipment->load($this->relations()));
+    }
+
+    public function completeDelivery(CompleteShipmentDeliveryRequest $request, Shipment $shipment): ShipmentResource
+    {
+        $shipment = $this->shipmentDeliveryCompletionService->execute(
+            $shipment,
+            $request->validated(),
+            $request->user()?->id,
+        );
+
+        return new ShipmentResource($shipment);
     }
 
     public function printList(PrintShipmentListRequest $request): JsonResponse
@@ -100,19 +118,12 @@ class ShipmentController
 
     public function updateStatus(UpdateShipmentStatusRequest $request, Shipment $shipment): ShipmentResource
     {
-        $shipment = DB::transaction(function () use ($request, $shipment) {
-            $shipment->update([
-                'status' => $request->string('status')->toString(),
-            ]);
-
-            $shipment->histories()->create([
-                'status' => $request->string('status')->toString(),
-                'notes' => $request->input('notes'),
-                'changed_by' => $request->user()?->id,
-            ]);
-
-            return $shipment->fresh();
-        });
+        $shipment = $this->shipmentStatusUpdateService->update(
+            $shipment,
+            $request->string('status')->toString(),
+            $request->input('notes'),
+            $request->user()?->id,
+        );
 
         return new ShipmentResource($shipment->load($this->relations()));
     }
@@ -132,11 +143,15 @@ class ShipmentController
     {
         return [
             'merchant',
+            'order',
+            'order.items',
             'deliveryGovernorate',
             'deliveryArea',
             'assignedDriver',
             'histories',
             'histories.changedBy',
+            'itemResults',
+            'itemResults.orderItem',
         ];
     }
 }

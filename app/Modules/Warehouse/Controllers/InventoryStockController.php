@@ -22,10 +22,11 @@ class InventoryStockController
         $validated = $request->validated();
 
         $stocks = InventoryStock::query()
-            ->with(['warehouse', 'warehouseProduct.merchant'])
+            ->with(['warehouse', 'warehouseProduct.merchant', 'warehouseBin.zone', 'warehouseBin.shelf'])
             ->when(isset($validated['warehouse_id']), fn ($query) => $query->where('warehouse_id', $validated['warehouse_id']))
             ->when(isset($validated['warehouse_product_id']), fn ($query) => $query->where('warehouse_product_id', $validated['warehouse_product_id']))
             ->when(isset($validated['merchant_id']), fn ($query) => $query->whereHas('warehouseProduct', fn ($inner) => $inner->where('merchant_id', $validated['merchant_id'])))
+            ->when(isset($validated['warehouse_bin_id']), fn ($query) => $query->where('warehouse_bin_id', $validated['warehouse_bin_id']))
             ->when(($validated['low_stock'] ?? false) === true, fn ($query) => $query->where('quantity_available', '<=', 5))
             ->latest()
             ->get();
@@ -35,7 +36,7 @@ class InventoryStockController
 
     public function show(InventoryStock $inventoryStock): InventoryStockResource
     {
-        return new InventoryStockResource($inventoryStock->load(['warehouse', 'warehouseProduct.merchant']));
+        return new InventoryStockResource($inventoryStock->load(['warehouse', 'warehouseProduct.merchant', 'warehouseBin.zone', 'warehouseBin.shelf']));
     }
 
     public function adjust(AdjustStockRequest $request): JsonResponse
@@ -43,13 +44,14 @@ class InventoryStockController
         $stock = $this->stockAdjustmentService->adjust(
             $request->integer('warehouse_id'),
             $request->integer('warehouse_product_id'),
+            $request->input('warehouse_bin_id'),
             $request->string('type')->toString(),
             $request->integer('quantity'),
             $request->input('notes'),
             $request->user()?->id,
         );
 
-        return (new InventoryStockResource($stock->load(['warehouse', 'warehouseProduct.merchant'])))
+        return (new InventoryStockResource($stock->load(['warehouse', 'warehouseProduct.merchant', 'warehouseBin.zone', 'warehouseBin.shelf'])))
             ->response()
             ->setStatusCode(201);
     }

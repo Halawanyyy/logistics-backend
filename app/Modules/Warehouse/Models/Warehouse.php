@@ -70,4 +70,19 @@ class Warehouse extends Model
     {
         return $this->hasMany(WarehouseCharge::class);
     }
+
+    public function zones(): HasMany
+    {
+        return $this->hasMany(WarehouseZone::class);
+    }
+
+    public function shelves(): HasMany
+    {
+        return $this->hasMany(WarehouseShelf::class);
+    }
+
+    public function bins(): HasMany
+    {
+        return $this->hasMany(WarehouseBin::class);
+    }
 }

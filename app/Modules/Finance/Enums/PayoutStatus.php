@@ -5,7 +5,9 @@ namespace App\Modules\Finance\Enums;
 class PayoutStatus
 {
     public const PENDING = 'pending';
+    public const APPROVED = 'approved';
     public const COMPLETED = 'completed';
+    public const REJECTED = 'rejected';
     public const CANCELLED = 'cancelled';
 
     /**
@@ -15,7 +17,9 @@ class PayoutStatus
     {
         return [
             self::PENDING,
+            self::APPROVED,
             self::COMPLETED,
+            self::REJECTED,
             self::CANCELLED,
         ];
     }

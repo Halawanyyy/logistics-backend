@@ -4,7 +4,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 require __DIR__ . '/../app/Modules/Auth/Routes/api.php';
+require __DIR__ . '/../app/Modules/Audit/Routes/api.php';
+require __DIR__ . '/../app/Modules/Settings/Routes/api.php';
+require __DIR__ . '/../app/Modules/Export/Routes/api.php';
+require __DIR__ . '/../app/Modules/Attachment/Routes/api.php';
+require __DIR__ . '/../app/Modules/MerchantIntegration/Routes/api.php';
 require __DIR__ . '/../app/Modules/UserManagement/Routes/api.php';
+require __DIR__ . '/../app/Modules/RolePermission/Routes/api.php';
+require __DIR__ . '/../app/Modules/Barcode/Routes/api.php';
 require __DIR__ . '/../app/Modules/Merchant/Routes/api.php';
 require __DIR__ . '/../app/Modules/LocationPricing/Routes/api.php';
 require __DIR__ . '/../app/Modules/Order/Routes/api.php';
