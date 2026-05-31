@@ -48,6 +48,7 @@ class Order extends Model
         'original_order_id',
         'payment_type',
         'fulfillment_type',
+        'warehouse_fulfillment_status',
         'is_fragile',
         'allow_inspection',
         'requires_packaging',

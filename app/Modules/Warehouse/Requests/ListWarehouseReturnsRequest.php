@@ -3,6 +3,7 @@
 namespace App\Modules\Warehouse\Requests;
 
 use App\Modules\Warehouse\Enums\WarehouseReturnCondition;
+use App\Modules\Warehouse\Enums\WarehouseReturnStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -40,6 +41,7 @@ class ListWarehouseReturnsRequest extends FormRequest
                 Rule::exists('warehouse_products', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
             'condition' => ['nullable', Rule::in(WarehouseReturnCondition::values())],
+            'status' => ['nullable', Rule::in(WarehouseReturnStatus::values())],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
         ];

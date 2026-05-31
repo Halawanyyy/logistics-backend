@@ -258,6 +258,7 @@ class ShipmentDeliveryCompletionService
             'quantity' => $quantity,
             'condition' => $itemData['return_condition'],
             'notes' => $itemData['notes'] ?? null,
+            'defer_processing' => true,
         ], $userId);
     }
 

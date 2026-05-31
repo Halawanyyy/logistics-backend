@@ -68,6 +68,23 @@ class MerchantPayoutController
             return $payout;
         });
 
+        $this->auditLogService->log(
+            AuditEventType::PAYOUT_CREATED,
+            'created',
+            $payout->fresh(),
+            null,
+            [
+                'user' => $request->user(),
+                'metadata' => [
+                    'merchant_id' => $payout->merchant_id,
+                    'payment_method' => $payout->payment_method,
+                    'reference_number' => $payout->reference_number,
+                    'source' => 'internal',
+                ],
+                'notes' => 'Merchant payout created.',
+            ],
+        );
+
         return (new MerchantPayoutResource($payout->load($this->relations())))
             ->response()
             ->setStatusCode(201);

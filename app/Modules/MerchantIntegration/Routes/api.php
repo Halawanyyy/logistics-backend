@@ -18,7 +18,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
-Route::middleware('merchant.integration.token')->prefix('integrations')->group(function () {
+Route::middleware(['merchant.integration.token', 'throttle:integration-api'])->prefix('integrations')->group(function () {
     Route::get('/me', [IntegrationConnectionController::class, 'me']);
     Route::post('/orders', [IntegrationOrderController::class, 'store']);
 });

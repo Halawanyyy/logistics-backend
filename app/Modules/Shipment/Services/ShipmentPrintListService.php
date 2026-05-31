@@ -15,6 +15,7 @@ class ShipmentPrintListService
     {
         return Shipment::query()
             ->with(['merchant', 'deliveryGovernorate', 'deliveryArea', 'assignedDriver'])
+            ->when(isset($filters['merchant_id']), fn (Builder $query) => $query->where('merchant_id', $filters['merchant_id']))
             ->when(isset($filters['assigned_driver_id']), fn (Builder $query) => $query->where('assigned_driver_id', $filters['assigned_driver_id']))
             ->when(isset($filters['delivery_governorate_id']), fn (Builder $query) => $query->where('delivery_governorate_id', $filters['delivery_governorate_id']))
             ->when(isset($filters['delivery_area_id']), fn (Builder $query) => $query->where('delivery_area_id', $filters['delivery_area_id']))

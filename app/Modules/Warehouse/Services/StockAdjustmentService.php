@@ -14,6 +14,7 @@ class StockAdjustmentService
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
+        private readonly WarehouseStockService $warehouseStockService,
     ) {
     }
 
@@ -26,77 +27,37 @@ class StockAdjustmentService
         }
 
         return DB::transaction(function () use ($warehouseId, $warehouseProductId, $warehouseBinId, $type, $quantity, $notes, $userId) {
-            $stock = InventoryStock::query()
-                ->lockForUpdate()
-                ->firstOrCreate(
-                    [
-                        'warehouse_id' => $warehouseId,
-                        'warehouse_product_id' => $warehouseProductId,
-                    ],
-                    [
-                        'warehouse_bin_id' => $warehouseBinId,
-                        'quantity_available' => 0,
-                        'quantity_reserved' => 0,
-                        'quantity_damaged' => 0,
-                    ]
-                );
-
-            if ($warehouseBinId !== null && (int) $stock->warehouse_bin_id !== $warehouseBinId) {
-                $stock->warehouse_bin_id = $warehouseBinId;
-            }
-
-            $beforeAvailable = $stock->quantity_available;
-            $beforeReserved = $stock->quantity_reserved;
-            $beforeDamaged = $stock->quantity_damaged;
-
-            $afterAvailable = $beforeAvailable;
-            $afterReserved = $beforeReserved;
-            $afterDamaged = $beforeDamaged;
+            $stock = $this->warehouseStockService->lockStock($warehouseId, $warehouseProductId, $warehouseBinId);
+            $availableDelta = 0;
+            $damagedDelta = 0;
 
             if ($type === StockMovementType::IN) {
-                $afterAvailable += $quantity;
+                $availableDelta = $quantity;
             } elseif ($type === StockMovementType::OUT) {
-                if ($beforeAvailable < $quantity) {
-                    throw new HttpResponseException(response()->json([
-                        'message' => 'Not enough available stock.',
-                    ], 422));
-                }
-
-                $afterAvailable -= $quantity;
+                $availableDelta = -$quantity;
             } elseif ($type === StockMovementType::DAMAGED) {
-                if ($beforeAvailable < $quantity) {
-                    throw new HttpResponseException(response()->json([
-                        'message' => 'Not enough available stock.',
-                    ], 422));
-                }
-
-                $afterAvailable -= $quantity;
-                $afterDamaged += $quantity;
+                $availableDelta = -$quantity;
+                $damagedDelta = $quantity;
             } elseif ($type === StockMovementType::ADJUSTMENT) {
-                $afterAvailable = $quantity;
+                $availableDelta = $quantity - (int) $stock->quantity_available;
             }
 
-            $stock->update([
-                'warehouse_bin_id' => $stock->warehouse_bin_id,
-                'quantity_available' => $afterAvailable,
-                'quantity_reserved' => $afterReserved,
-                'quantity_damaged' => $afterDamaged,
-            ]);
+            $snapshot = $this->warehouseStockService->applyDelta(
+                $stock,
+                availableDelta: $availableDelta,
+                damagedDelta: $damagedDelta,
+                warehouseBinId: $warehouseBinId,
+            );
 
-            StockMovement::create([
-                'warehouse_id' => $warehouseId,
-                'warehouse_product_id' => $warehouseProductId,
-                'type' => $type,
-                'quantity' => $quantity,
-                'before_available' => $beforeAvailable,
-                'after_available' => $afterAvailable,
-                'before_reserved' => $beforeReserved,
-                'after_reserved' => $afterReserved,
-                'before_damaged' => $beforeDamaged,
-                'after_damaged' => $afterDamaged,
-                'notes' => $notes,
-                'created_by' => $userId,
-            ]);
+            $this->warehouseStockService->createMovement(
+                warehouseId: $warehouseId,
+                warehouseProductId: $warehouseProductId,
+                type: $type,
+                quantity: $quantity,
+                snapshot: $snapshot,
+                notes: $notes,
+                userId: $userId,
+            );
 
             $this->auditLogService->log(
                 AuditEventType::INVENTORY_ADJUSTED,
@@ -106,14 +67,14 @@ class StockAdjustmentService
                 [
                     'user_id' => $userId,
                     'old_values' => [
-                        'quantity_available' => $beforeAvailable,
-                        'quantity_reserved' => $beforeReserved,
-                        'quantity_damaged' => $beforeDamaged,
+                        'quantity_available' => $snapshot['before_available'],
+                        'quantity_reserved' => $snapshot['before_reserved'],
+                        'quantity_damaged' => $snapshot['before_damaged'],
                     ],
                     'new_values' => [
-                        'quantity_available' => $afterAvailable,
-                        'quantity_reserved' => $afterReserved,
-                        'quantity_damaged' => $afterDamaged,
+                        'quantity_available' => $snapshot['after_available'],
+                        'quantity_reserved' => $snapshot['after_reserved'],
+                        'quantity_damaged' => $snapshot['after_damaged'],
                     ],
                     'metadata' => [
                         'warehouse_id' => $warehouseId,
@@ -125,7 +86,10 @@ class StockAdjustmentService
                 ],
             );
 
-            return $stock->fresh();
+            /** @var InventoryStock $freshStock */
+            $freshStock = $snapshot['stock'];
+
+            return $freshStock;
         });
     }
 }

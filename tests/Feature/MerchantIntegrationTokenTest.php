@@ -106,7 +106,7 @@ class MerchantIntegrationTokenTest extends TestCase
             ->assertJsonPath('message', 'Integration token expired.');
     }
 
-    public function test_plugin_can_create_order_with_token_and_prevent_duplicates_and_spoofing(): void
+    public function test_plugin_can_create_order_with_token_and_prevent_duplicates_and_reject_merchant_id_spoofing(): void
     {
         [$merchant, $plainToken] = $this->createTokenPair();
         [$governorate, $area] = $this->makeLocation();
@@ -137,6 +137,13 @@ class MerchantIntegrationTokenTest extends TestCase
                 ],
             ],
         ];
+
+        $this->withHeader('Authorization', 'Bearer '.$plainToken)
+            ->postJson('/api/integrations/orders', $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('merchant_id');
+
+        unset($payload['merchant_id']);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$plainToken)
             ->postJson('/api/integrations/orders', $payload);

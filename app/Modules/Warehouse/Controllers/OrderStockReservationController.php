@@ -79,6 +79,7 @@ class OrderStockReservationController
             'deliveryGovernorate',
             'deliveryArea',
             'items',
+            'latestStockReservation',
             'stockReservations.warehouse',
             'stockReservations.warehouseProduct.merchant',
             'stockReservations.createdBy',

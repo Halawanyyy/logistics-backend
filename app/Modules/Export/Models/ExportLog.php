@@ -2,6 +2,7 @@
 
 namespace App\Modules\Export\Models;
 
+use App\Models\Merchant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +13,7 @@ class ExportLog extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'merchant_id',
         'export_type',
         'format',
         'filters',
@@ -35,5 +37,10 @@ class ExportLog extends Model
     public function generatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'generated_by');
+    }
+
+    public function merchant(): BelongsTo
+    {
+        return $this->belongsTo(Merchant::class);
     }
 }

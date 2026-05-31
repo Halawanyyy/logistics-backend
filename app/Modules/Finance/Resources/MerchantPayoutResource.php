@@ -2,6 +2,7 @@
 
 namespace App\Modules\Finance\Resources;
 
+use App\Services\LocalizedLabelService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +13,8 @@ class MerchantPayoutResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $labels = app(LocalizedLabelService::class);
+
         return [
             'id' => $this->id,
             'merchant_id' => $this->merchant_id,
@@ -20,6 +23,7 @@ class MerchantPayoutResource extends JsonResource
             'treasury_account_name' => $this->whenLoaded('treasuryAccount', fn () => $this->treasuryAccount?->name),
             'amount' => $this->amount,
             'status' => $this->status,
+            'status_label' => $labels->label('finance.payout_status', $this->status),
             'payment_method' => $this->payment_method,
             'reference_number' => $this->reference_number,
             'notes' => $this->notes,

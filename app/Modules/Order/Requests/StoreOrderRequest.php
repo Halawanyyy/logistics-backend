@@ -18,6 +18,15 @@ class StoreOrderRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('fulfillment_type')) {
+            $this->merge([
+                'fulfillment_type' => OrderFulfillmentType::normalize($this->input('fulfillment_type')),
+            ]);
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -64,7 +73,7 @@ class StoreOrderRequest extends FormRequest
             'swap_notes' => ['nullable', 'string'],
             'payment_type' => ['nullable', Rule::in(PaymentType::values())],
 
-            'fulfillment_type' => ['nullable', Rule::in(OrderFulfillmentType::values())],
+            'fulfillment_type' => ['nullable', Rule::in(OrderFulfillmentType::inputValues())],
             'is_fragile' => ['nullable', 'boolean'],
             'allow_inspection' => ['nullable', 'boolean'],
             'requires_packaging' => ['nullable', 'boolean'],
@@ -106,7 +115,7 @@ class StoreOrderRequest extends FormRequest
                     ->exists();
 
                 if (! $belongsToGovernorate) {
-                    $validator->errors()->add('delivery_area_id', 'The selected delivery area does not belong to the selected delivery governorate.');
+                    $validator->errors()->add('delivery_area_id', __('validation.custom.delivery_area_id.belongs_to_governorate'));
                 }
             }
 
@@ -119,7 +128,7 @@ class StoreOrderRequest extends FormRequest
             $pickupGovernorateId = $this->input('pickup_governorate_id');
 
             if ($pickupGovernorateId === null) {
-                $validator->errors()->add('pickup_governorate_id', 'The pickup governorate field is required when pickup area is present.');
+                $validator->errors()->add('pickup_governorate_id', __('validation.custom.pickup_governorate_id.required_with_pickup_area'));
                 return;
             }
 
@@ -129,7 +138,7 @@ class StoreOrderRequest extends FormRequest
                 ->exists();
 
             if (! $pickupAreaBelongsToGovernorate) {
-                $validator->errors()->add('pickup_area_id', 'The selected pickup area does not belong to the selected pickup governorate.');
+                $validator->errors()->add('pickup_area_id', __('validation.custom.pickup_area_id.belongs_to_governorate'));
             }
 
             $orderType = $this->input('order_type', OrderType::DELIVERY);
@@ -138,14 +147,14 @@ class StoreOrderRequest extends FormRequest
 
             if ($orderType === OrderType::RETURN) {
                 if ($fulfillmentType !== null && $fulfillmentType !== OrderFulfillmentType::PICKUP_FROM_CUSTOMER) {
-                    $validator->errors()->add('fulfillment_type', 'Return orders must use pickup_from_customer fulfillment type.');
+                    $validator->errors()->add('fulfillment_type', __('validation.custom.fulfillment_type.return_orders_only'));
                 }
             } elseif ($fulfillmentType === OrderFulfillmentType::PICKUP_FROM_CUSTOMER) {
-                $validator->errors()->add('fulfillment_type', 'The pickup_from_customer fulfillment type is only allowed for return orders.');
+                $validator->errors()->add('fulfillment_type', __('validation.custom.fulfillment_type.pickup_from_customer_only_for_returns'));
             }
 
             if ($originalOrderId !== null && $orderType !== OrderType::SWAP) {
-                $validator->errors()->add('original_order_id', 'The original order id field is only allowed for swap orders.');
+                $validator->errors()->add('original_order_id', __('validation.custom.original_order_id.only_for_swap_orders'));
             }
         });
     }

@@ -5,7 +5,7 @@ use App\Modules\Shipment\Controllers\DeliveryAttemptController;
 use App\Modules\Shipment\Controllers\ShipmentController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/track/{shipment_number}', [TrackingController::class, 'show']);
+Route::get('/track/{shipment_number}', [TrackingController::class, 'show'])->middleware('throttle:public-tracking');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('shipments')->group(function () {

@@ -63,6 +63,7 @@ class DriverManifestFlowTest extends TestCase
         $this->assertDatabaseHas('shipments', [
             'id' => $shipmentId,
             'status' => ShipmentStatus::OUT_FOR_DELIVERY,
+            'assigned_driver_id' => $driver->id,
         ]);
 
         $this->postJson('/api/shipments/'.$shipmentId.'/complete-delivery', [

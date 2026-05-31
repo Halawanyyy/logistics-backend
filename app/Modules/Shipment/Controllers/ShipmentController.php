@@ -42,11 +42,14 @@ class ShipmentController
             ->when(($validated['partially_delivered'] ?? false) === true, fn ($query) => $query->where('status', \App\Modules\Shipment\Enums\ShipmentStatus::PARTIALLY_DELIVERED))
             ->when(isset($validated['merchant_id']), fn ($query) => $query->where('merchant_id', $validated['merchant_id']))
             ->when(isset($validated['order_type']), fn ($query) => $query->whereHas('order', fn ($orderQuery) => $orderQuery->where('order_type', $validated['order_type'])))
+            ->when(isset($validated['payment_type']), fn ($query) => $query->whereHas('order', fn ($orderQuery) => $orderQuery->where('payment_type', $validated['payment_type'])))
+            ->when(($validated['cod_only'] ?? false) === true, fn ($query) => $query->where('cod_amount', '>', 0))
             ->when(isset($validated['assigned_driver_id']), fn ($query) => $query->where('assigned_driver_id', $validated['assigned_driver_id']))
             ->when(isset($validated['delivery_governorate_id']), fn ($query) => $query->where('delivery_governorate_id', $validated['delivery_governorate_id']))
             ->when(isset($validated['delivery_area_id']), fn ($query) => $query->where('delivery_area_id', $validated['delivery_area_id']))
             ->when(isset($validated['date_from']), fn ($query) => $query->whereDate('created_at', '>=', $validated['date_from']))
             ->when(isset($validated['date_to']), fn ($query) => $query->whereDate('created_at', '<=', $validated['date_to']))
+            ->when(isset($validated['shipment_number']), fn ($query) => $query->where('shipment_number', 'like', '%'.$validated['shipment_number'].'%'))
             ->when(isset($validated['search']), function ($query) use ($validated) {
                 $search = $validated['search'];
 
@@ -54,7 +57,8 @@ class ShipmentController
                     $searchQuery
                         ->where('shipment_number', 'like', '%'.$search.'%')
                         ->orWhere('customer_name', 'like', '%'.$search.'%')
-                        ->orWhere('customer_phone', 'like', '%'.$search.'%');
+                        ->orWhere('customer_phone', 'like', '%'.$search.'%')
+                        ->orWhere('barcode', 'like', '%'.$search.'%');
                 });
             })
             ->latest()

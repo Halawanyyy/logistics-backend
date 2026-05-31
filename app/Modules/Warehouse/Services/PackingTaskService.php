@@ -4,12 +4,13 @@ namespace App\Modules\Warehouse\Services;
 
 use App\Modules\Audit\Enums\AuditEventType;
 use App\Modules\Audit\Services\AuditLogService;
+use App\Modules\Warehouse\Enums\WarehouseFulfillmentStatus;
 use App\Modules\Warehouse\Enums\PackingTaskStatus;
 use App\Modules\Warehouse\Enums\WarehouseChargeType;
 use App\Modules\Warehouse\Models\PackingTask;
 use App\Modules\Warehouse\Models\PickingList;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class PackingTaskService
@@ -17,13 +18,14 @@ class PackingTaskService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly WarehouseChargeService $warehouseChargeService,
+        private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
     ) {
     }
 
     /**
-     * @return Collection<int, PackingTask>
+     * @return EloquentCollection<int, PackingTask>
      */
-    public function generateFromPickingList(PickingList $pickingList): Collection
+    public function generateFromPickingList(PickingList $pickingList): EloquentCollection
     {
         return DB::transaction(function () use ($pickingList) {
             $pickingList = PickingList::query()
@@ -31,7 +33,7 @@ class PackingTaskService
                 ->lockForUpdate()
                 ->findOrFail($pickingList->id);
 
-            $tasks = collect();
+            $tasks = new EloquentCollection();
 
             foreach ($pickingList->items->groupBy('order_id') as $orderId => $items) {
                 $existingTask = PackingTask::query()
@@ -124,6 +126,8 @@ class PackingTaskService
                     'notes' => $packingTask->notes ?? 'Packing task completed.',
                 ],
             );
+
+            $this->orderWarehouseStatusService->setStatus($packingTask->order, WarehouseFulfillmentStatus::PACKED);
 
             return $packingTask->fresh()->load([
                 'pickingList',

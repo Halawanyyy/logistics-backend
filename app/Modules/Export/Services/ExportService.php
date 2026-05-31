@@ -8,12 +8,16 @@ use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Driver\Models\DriverManifest;
 use App\Modules\Export\Models\ExportLog;
 use App\Modules\Finance\Models\MerchantWalletTransaction;
+use App\Modules\Finance\Models\MerchantInvoice;
+use App\Modules\Finance\Models\MerchantPayout;
 use App\Modules\Finance\Models\TreasuryTransaction;
 use App\Modules\Finance\Services\FinanceReportService;
+use App\Modules\MerchantPortal\Models\MerchantInboundStockRequest;
 use App\Modules\Order\Models\Order;
 use App\Modules\Settings\Services\SystemSettingService;
 use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\InventoryStock;
+use App\Modules\Warehouse\Models\StockMovement;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Storage;
@@ -29,6 +33,11 @@ class ExportService
         'shipments',
         'driver_manifests',
         'merchant_wallet_transactions',
+        'wallet_transactions',
+        'stock_movements',
+        'invoices',
+        'payouts',
+        'inbound_stock_requests',
         'finance_reports',
         'warehouse_inventory',
         'treasury_transactions',
@@ -45,7 +54,7 @@ class ExportService
     /**
      * @param  array<string, mixed>  $filters
      */
-    public function generate(string $type, string $format, array $filters = [], ?int $generatedBy = null): ExportLog
+    public function generate(string $type, string $format, array $filters = [], ?int $generatedBy = null, ?int $merchantId = null): ExportLog
     {
         $type = strtolower($type);
         $format = strtolower($format);
@@ -68,6 +77,7 @@ class ExportService
         Storage::disk('exports')->put($fileName, $this->toCsv($rows));
 
         $exportLog = ExportLog::query()->create([
+            'merchant_id' => $merchantId,
             'export_type' => $type,
             'format' => $format,
             'filters' => $filters === [] ? null : $filters,
@@ -106,9 +116,22 @@ class ExportService
 
     public function diskPath(string $filePath): string
     {
-        return str_starts_with($filePath, 'exports/')
+        $normalized = str_replace('\\', '/', str_starts_with($filePath, 'exports/')
             ? Str::after($filePath, 'exports/')
-            : $filePath;
+            : $filePath);
+
+        if (
+            $normalized === ''
+            || str_starts_with($normalized, '/')
+            || str_contains($normalized, '../')
+            || str_contains($normalized, '..\\')
+        ) {
+            throw new HttpResponseException(response()->json([
+                'message' => 'Export file not found.',
+            ], 404));
+        }
+
+        return ltrim($normalized, '/');
     }
 
     /**
@@ -122,6 +145,11 @@ class ExportService
             'shipments' => $this->shipmentRows($filters),
             'driver_manifests' => $this->driverManifestRows($filters),
             'merchant_wallet_transactions' => $this->walletRows($filters),
+            'wallet_transactions' => $this->walletRows($filters),
+            'stock_movements' => $this->stockMovementRows($filters),
+            'invoices' => $this->invoiceRows($filters),
+            'payouts' => $this->payoutRows($filters),
+            'inbound_stock_requests' => $this->inboundRequestRows($filters),
             'finance_reports' => $this->financeReportRows($filters),
             'warehouse_inventory' => $this->warehouseInventoryRows($filters),
             'treasury_transactions' => $this->treasuryRows($filters),
@@ -370,6 +398,116 @@ class ExportService
                 'quantity_reserved' => $stock->quantity_reserved,
                 'quantity_damaged' => $stock->quantity_damaged,
                 'created_at' => $stock->created_at?->toISOString(),
+            ])->values()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return list<array<string, scalar|null>>
+     */
+    private function stockMovementRows(array $filters): array
+    {
+        return StockMovement::query()
+            ->with(['warehouse', 'warehouseProduct.merchant'])
+            ->when(isset($filters['date_from']), fn (Builder $query) => $query->whereDate('created_at', '>=', $filters['date_from']))
+            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']))
+            ->when(isset($filters['merchant_id']), function (Builder $query) use ($filters): void {
+                $query->whereHas('warehouseProduct', fn (Builder $productQuery) => $productQuery->where('merchant_id', $filters['merchant_id']));
+            })
+            ->when(isset($filters['warehouse_id']), fn (Builder $query) => $query->where('warehouse_id', $filters['warehouse_id']))
+            ->when(isset($filters['movement_type']), fn (Builder $query) => $query->where('type', $filters['movement_type']))
+            ->latest()
+            ->get()
+            ->map(fn (StockMovement $movement) => [
+                'id' => $movement->id,
+                'merchant_name' => $movement->warehouseProduct?->merchant?->name,
+                'warehouse_name' => $movement->warehouse?->name,
+                'product_name' => $movement->warehouseProduct?->name,
+                'sku' => $movement->warehouseProduct?->sku,
+                'movement_type' => $movement->type,
+                'quantity' => $movement->quantity,
+                'reference_type' => $movement->reference_type,
+                'reference_id' => $movement->reference_id,
+                'created_at' => $movement->created_at?->toISOString(),
+            ])->values()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return list<array<string, scalar|null>>
+     */
+    private function invoiceRows(array $filters): array
+    {
+        return MerchantInvoice::query()
+            ->with('merchant')
+            ->when(isset($filters['date_from']), fn (Builder $query) => $query->whereDate('created_at', '>=', $filters['date_from']))
+            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']))
+            ->when(isset($filters['merchant_id']), fn (Builder $query) => $query->where('merchant_id', $filters['merchant_id']))
+            ->when(isset($filters['status']), fn (Builder $query) => $query->where('status', $filters['status']))
+            ->when(isset($filters['invoice_number']), fn (Builder $query) => $query->where('invoice_number', 'like', '%'.$filters['invoice_number'].'%'))
+            ->latest()
+            ->get()
+            ->map(fn (MerchantInvoice $invoice) => [
+                'id' => $invoice->id,
+                'merchant_name' => $invoice->merchant?->name,
+                'invoice_number' => $invoice->invoice_number,
+                'status' => $invoice->status,
+                'total_payable' => $invoice->total_payable,
+                'issued_at' => $invoice->issued_at?->toISOString(),
+                'created_at' => $invoice->created_at?->toISOString(),
+            ])->values()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return list<array<string, scalar|null>>
+     */
+    private function payoutRows(array $filters): array
+    {
+        return MerchantPayout::query()
+            ->with('merchant')
+            ->when(isset($filters['date_from']), fn (Builder $query) => $query->whereDate('created_at', '>=', $filters['date_from']))
+            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']))
+            ->when(isset($filters['merchant_id']), fn (Builder $query) => $query->where('merchant_id', $filters['merchant_id']))
+            ->when(isset($filters['status']), fn (Builder $query) => $query->where('status', $filters['status']))
+            ->when(isset($filters['payout_number']), fn (Builder $query) => $query->where('reference_number', 'like', '%'.$filters['payout_number'].'%'))
+            ->latest()
+            ->get()
+            ->map(fn (MerchantPayout $payout) => [
+                'id' => $payout->id,
+                'merchant_name' => $payout->merchant?->name,
+                'reference_number' => $payout->reference_number,
+                'status' => $payout->status,
+                'amount' => $payout->amount,
+                'payment_method' => $payout->payment_method,
+                'created_at' => $payout->created_at?->toISOString(),
+            ])->values()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return list<array<string, scalar|null>>
+     */
+    private function inboundRequestRows(array $filters): array
+    {
+        return MerchantInboundStockRequest::query()
+            ->with(['merchant', 'warehouse'])
+            ->when(isset($filters['date_from']), fn (Builder $query) => $query->whereDate('created_at', '>=', $filters['date_from']))
+            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']))
+            ->when(isset($filters['merchant_id']), fn (Builder $query) => $query->where('merchant_id', $filters['merchant_id']))
+            ->when(isset($filters['status']), fn (Builder $query) => $query->where('status', $filters['status']))
+            ->when(isset($filters['request_number']), fn (Builder $query) => $query->where('request_number', 'like', '%'.$filters['request_number'].'%'))
+            ->when(isset($filters['warehouse_id']), fn (Builder $query) => $query->where('warehouse_id', $filters['warehouse_id']))
+            ->latest()
+            ->get()
+            ->map(fn (MerchantInboundStockRequest $request) => [
+                'id' => $request->id,
+                'merchant_name' => $request->merchant?->name,
+                'warehouse_name' => $request->warehouse?->name,
+                'request_number' => $request->request_number,
+                'status' => $request->status,
+                'expected_arrival_date' => $request->expected_arrival_date?->toDateString(),
+                'created_at' => $request->created_at?->toISOString(),
             ])->values()->all();
     }
 

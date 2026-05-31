@@ -78,7 +78,7 @@ class WarehouseFlowTest extends TestCase
             ->assertOk()
             ->json('data.id');
 
-        $this->postJson('/api/shipments/'.$shipmentId.'/complete-delivery', [
+        $deliveryResponse = $this->postJson('/api/shipments/'.$shipmentId.'/complete-delivery', [
             'shipment_status' => ShipmentStatus::FAILED,
             'notes' => 'Customer refused item',
             'items' => [
@@ -92,6 +92,35 @@ class WarehouseFlowTest extends TestCase
             ],
         ])->assertOk()
             ->assertJsonPath('data.status', ShipmentStatus::FAILED);
+
+        $warehouseReturn = WarehouseReturn::query()->firstOrFail();
+        $warehouseReturnItemId = $warehouseReturn->items()->value('id');
+
+        $this->assertSame('pending', $warehouseReturn->status);
+
+        $this->postJson('/api/warehouse-returns/'.$warehouseReturn->id.'/receive', [
+            'items' => [[
+                'warehouse_return_item_id' => $warehouseReturnItemId,
+                'received_quantity' => 1,
+            ]],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'received');
+
+        $this->postJson('/api/warehouse-returns/'.$warehouseReturn->id.'/inspect', [
+            'items' => [[
+                'warehouse_return_item_id' => $warehouseReturnItemId,
+                'condition' => 'sellable',
+            ]],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'inspected');
+
+        $this->postJson('/api/warehouse-returns/'.$warehouseReturn->id.'/restock', [
+            'items' => [[
+                'warehouse_return_item_id' => $warehouseReturnItemId,
+                'quantity' => 1,
+            ]],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'restocked');
 
         $stock = InventoryStock::query()
             ->where('warehouse_id', $warehouse->id)

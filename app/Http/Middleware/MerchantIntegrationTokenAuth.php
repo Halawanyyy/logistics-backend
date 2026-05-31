@@ -24,7 +24,7 @@ class MerchantIntegrationTokenAuth
     {
         if (! (bool) $this->systemSettingService->get('integration_tokens_enabled', true)) {
             return response()->json([
-                'message' => 'Integration tokens are disabled.',
+                'message' => __('integrations.tokens_disabled'),
             ], 403);
         }
 
@@ -32,7 +32,7 @@ class MerchantIntegrationTokenAuth
 
         if ($plainToken === null) {
             return response()->json([
-                'message' => 'Invalid integration token.',
+                'message' => __('integrations.invalid_token'),
             ], 401);
         }
 
@@ -43,18 +43,18 @@ class MerchantIntegrationTokenAuth
 
             if ($candidate?->status === MerchantIntegrationToken::STATUS_REVOKED || $candidate?->revoked_at !== null) {
                 return response()->json([
-                    'message' => 'Integration token revoked.',
+                    'message' => __('integrations.token_revoked'),
                 ], 401);
             }
 
             if ($candidate?->isExpired()) {
                 return response()->json([
-                    'message' => 'Integration token expired.',
+                    'message' => __('integrations.token_expired'),
                 ], 401);
             }
 
             return response()->json([
-                'message' => 'Invalid integration token.',
+                'message' => __('integrations.invalid_token'),
             ], 401);
         }
 

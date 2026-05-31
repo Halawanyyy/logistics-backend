@@ -27,8 +27,12 @@ class InventoryStockResource extends JsonResource
             'sku' => $this->whenLoaded('warehouseProduct', fn () => $this->warehouseProduct?->sku),
             'barcode' => $this->whenLoaded('warehouseProduct', fn () => $this->warehouseProduct?->barcode),
             'quantity_available' => $this->quantity_available,
+            'available_quantity' => $this->quantity_available,
             'quantity_reserved' => $this->quantity_reserved,
+            'reserved_quantity' => $this->quantity_reserved,
             'quantity_damaged' => $this->quantity_damaged,
+            'damaged_quantity' => $this->quantity_damaged,
+            'on_hand_quantity' => (int) $this->quantity_available + (int) $this->quantity_reserved,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

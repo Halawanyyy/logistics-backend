@@ -37,6 +37,7 @@ class IntegrationOrderController
         $this->ensurePermission($token, 'orders.create');
 
         $validated = $request->validate([
+            'merchant_id' => ['prohibited'],
             'external_source' => ['required', 'string', 'max:100'],
             'external_order_id' => ['required', 'string', 'max:255'],
             'external_order_number' => ['nullable', 'string', 'max:255'],
@@ -95,7 +96,7 @@ class IntegrationOrderController
 
         if ($exists) {
             throw new HttpResponseException(response()->json([
-                'message' => 'Duplicate external order for this merchant and source.',
+                'message' => __('orders.duplicate_external_order'),
             ], 422));
         }
 
@@ -152,7 +153,7 @@ class IntegrationOrderController
 
         if (! in_array($permission, $permissions, true)) {
             throw new HttpResponseException(response()->json([
-                'message' => 'Integration token does not have required permission.',
+                'message' => __('integrations.missing_permission'),
             ], 403));
         }
     }

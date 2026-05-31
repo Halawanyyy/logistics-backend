@@ -61,6 +61,10 @@ class DriverManifestService
                     $this->fail('Selected shipments must be ready for dispatch or already out for delivery.');
                 }
 
+                if ($shipment->assigned_driver_id !== null && (int) $shipment->assigned_driver_id !== (int) $data['driver_id']) {
+                    $this->fail('Shipment is already assigned to another driver.');
+                }
+
                 $isInAnotherOpenManifest = DriverManifestItem::query()
                     ->where('shipment_id', $shipment->id)
                     ->whereHas('manifest', fn (Builder $query) => $query->where('status', DriverManifestStatus::OPEN))
@@ -84,6 +88,12 @@ class DriverManifestService
             ]);
 
             foreach ($shipments as $shipment) {
+                if ((int) $shipment->assigned_driver_id !== (int) $data['driver_id']) {
+                    $shipment->update([
+                        'assigned_driver_id' => $data['driver_id'],
+                    ]);
+                }
+
                 $manifest->items()->create([
                     'shipment_id' => $shipment->id,
                     'shipment_number' => $shipment->shipment_number,

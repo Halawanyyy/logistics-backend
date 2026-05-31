@@ -14,6 +14,7 @@ class AssignDriverToShipmentAction
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
+        private readonly \App\Modules\Shipment\Services\ShipmentStatusUpdateService $shipmentStatusUpdateService,
     ) {
     }
 
@@ -25,6 +26,10 @@ class AssignDriverToShipmentAction
 
         if ($shipment->status === ShipmentStatus::DELIVERED) {
             $this->fail('Delivered shipment cannot be reassigned.');
+        }
+
+        if ($shipment->status === ShipmentStatus::FAILED) {
+            $this->fail('Failed shipment cannot be reassigned.');
         }
 
         if (in_array($shipment->status, [
@@ -44,6 +49,15 @@ class AssignDriverToShipmentAction
         $shipment->update([
             'assigned_driver_id' => $driver->id,
         ]);
+
+        if ($shipment->status === ShipmentStatus::PENDING_PICKUP) {
+            $shipment = $this->shipmentStatusUpdateService->update(
+                $shipment,
+                ShipmentStatus::DRIVER_ASSIGNED,
+                'Driver assigned to shipment.',
+                auth()->id(),
+            );
+        }
 
         $this->auditLogService->log(
             AuditEventType::SHIPMENT_DRIVER_ASSIGNED,

@@ -17,6 +17,30 @@
 - Many protected endpoints now also require a permission middleware check such as `permission:orders.view` or `permission:finance.payouts.create`.
 - If the authenticated user does not have the required permission, the API returns `403`.
 
+## Localization Notes
+
+- Supported request locales:
+  - `en`
+  - `ar`
+- Locale headers:
+  - `X-Locale: ar` or `X-Locale: en`
+  - `Accept-Language: ar` or `Accept-Language: en`
+- Header priority:
+  - `X-Locale`
+  - `Accept-Language`
+  - configured app default locale
+- Locale support is additive:
+  - stored enum/status values remain unchanged
+  - API resources may now include additive localized fields such as `status_label`, `payment_type_label`, `fulfillment_type_label`, `role_label`, and `movement_type_label`
+- Example:
+
+```json
+{
+  "status": "delivered",
+  "status_label": "تم التسليم"
+}
+```
+
 Permission-denied response example:
 
 ```json
@@ -25,6 +49,247 @@ Permission-denied response example:
 }
 ```
 
+## Public Tracking Localization
+
+- `GET /api/track/{shipment_number}` remains public, throttled, and redacted.
+- It now localizes safe status/timeline labels using the active request locale.
+- Raw shipment status values remain stable.
+- Public tracking still does not expose:
+  - customer full name
+  - full delivery address
+  - customer phone
+  - driver/internal notes
+  - raw history notes
+
+## Warehouse Phase 2 APIs
+
+### Fulfillment Type Compatibility
+
+- Stored order values remain:
+  - `pickup_from_merchant`
+  - `from_warehouse`
+  - `pickup_from_customer`
+- The order create and update APIs now also accept these input aliases:
+  - `merchant_pickup` -> stored as `pickup_from_merchant`
+  - `warehouse_fulfillment` -> stored as `from_warehouse`
+- Order responses now include additive field `warehouse_fulfillment_status`.
+
+### Warehouse Receiving
+
+- New endpoints:
+  - `GET /api/warehouse-receipts`
+  - `GET /api/warehouse-receipts/{warehouseReceipt}`
+  - `POST /api/warehouse-receipts`
+  - `PUT /api/warehouse-receipts/{warehouseReceipt}`
+  - `POST /api/warehouse-receipts/{warehouseReceipt}/confirm`
+  - `POST /api/warehouse-receipts/{warehouseReceipt}/cancel`
+- Business rules:
+  - Receipts are created as `draft`
+  - Only draft receipts can be updated, confirmed, or cancelled
+  - Confirming a receipt increases stock by `accepted_quantity` only
+  - Confirmation creates immutable `stock_in` movements
+
+Receipt request example:
+
+```json
+{
+  "merchant_id": 1,
+  "warehouse_id": 1,
+  "notes": "Inbound merchant stock",
+  "items": [
+    {
+      "warehouse_product_id": 1,
+      "quantity": 10,
+      "accepted_quantity": 9,
+      "rejected_quantity": 1,
+      "condition": "good",
+      "notes": "One damaged carton"
+    }
+  ]
+}
+```
+
+### Warehouse Product Barcode APIs
+
+- New endpoints:
+  - `POST /api/warehouse-products/{warehouseProduct}/generate-barcode`
+  - `GET /api/warehouse-products/{warehouseProduct}/barcode`
+  - `GET /api/warehouse-products/{warehouseProduct}/barcode-label`
+  - `POST /api/warehouse-products/barcode-labels/bulk`
+  - `POST /api/warehouse/barcode/scan`
+- Notes:
+  - Barcode generation is idempotent
+  - Existing barcodes are preserved
+  - Printable HTML is returned for label endpoints
+  - Product responses now include additive fields:
+    - `barcode_type`
+    - `barcode_generated_at`
+    - `minimum_stock_quantity`
+    - `low_stock_alert_enabled`
+
+Bulk label request example:
+
+```json
+{
+  "items": [
+    {
+      "warehouse_product_id": 1,
+      "quantity": 10
+    }
+  ]
+}
+```
+
+Barcode scan request example:
+
+```json
+{
+  "barcode": "WH-PROD-1-20260528-000001"
+}
+```
+
+### Warehouse Order Workflow APIs
+
+- New endpoints:
+  - `POST /api/orders/{order}/warehouse/start-picking`
+  - `POST /api/orders/{order}/warehouse/mark-picked`
+  - `POST /api/orders/{order}/warehouse/start-packing`
+  - `POST /api/orders/{order}/warehouse/mark-packed`
+  - `POST /api/orders/{order}/warehouse/ready-for-dispatch`
+- Existing compatible endpoints:
+  - `POST /api/orders/{order}/reserve-stock`
+  - `POST /api/orders/{order}/release-stock`
+  - `POST /api/orders/{order}/fulfill-from-warehouse`
+- `warehouse_fulfillment_status` values:
+  - `not_required`
+  - `pending_reservation`
+  - `reserved`
+  - `picking`
+  - `picked`
+  - `packing`
+  - `packed`
+  - `ready_for_dispatch`
+  - `fulfilled`
+  - `cancelled`
+
+### Warehouse Return Lifecycle APIs
+
+- Existing endpoint kept:
+  - `POST /api/warehouse-returns`
+- New endpoints:
+  - `PATCH /api/warehouse-returns/{warehouseReturn}/status`
+  - `POST /api/warehouse-returns/{warehouseReturn}/receive`
+  - `POST /api/warehouse-returns/{warehouseReturn}/inspect`
+  - `POST /api/warehouse-returns/{warehouseReturn}/restock`
+  - `POST /api/warehouse-returns/{warehouseReturn}/mark-damaged`
+  - `POST /api/warehouse-returns/{warehouseReturn}/reject`
+  - `POST /api/warehouse-returns/{warehouseReturn}/close`
+- Return statuses:
+  - `pending`
+  - `received`
+  - `inspected`
+  - `restocked`
+  - `damaged`
+  - `rejected`
+  - `closed`
+- Stock movement types used by returns:
+  - `return_received`
+  - `return_restocked`
+  - `return_damaged`
+  - `return_rejected`
+
+Manual staged return create example:
+
+```json
+{
+  "warehouse_id": 1,
+  "notes": "Customer warehouse return",
+  "items": [
+    {
+      "warehouse_product_id": 1,
+      "expected_quantity": 2,
+      "condition": "sellable"
+    }
+  ]
+}
+```
+
+### Warehouse Transfer APIs
+
+- New endpoints:
+  - `GET /api/warehouse-transfers`
+  - `GET /api/warehouse-transfers/{warehouseTransfer}`
+  - `POST /api/warehouse-transfers`
+  - `PUT /api/warehouse-transfers/{warehouseTransfer}`
+  - `POST /api/warehouse-transfers/{warehouseTransfer}/confirm`
+  - `POST /api/warehouse-transfers/{warehouseTransfer}/dispatch`
+  - `POST /api/warehouse-transfers/{warehouseTransfer}/receive`
+  - `POST /api/warehouse-transfers/{warehouseTransfer}/cancel`
+- Transfer statuses:
+  - `draft`
+  - `confirmed`
+  - `in_transit`
+  - `received`
+  - `cancelled`
+- Stock movement types:
+  - `stock_transfer_out`
+  - `stock_transfer_in`
+
+### Inventory, Movement, Product, Return, Receipt, and Transfer Filters
+
+- `GET /api/inventory-stocks`
+  - `merchant_id`, `warehouse_id`, `warehouse_product_id`, `warehouse_bin_id`, `sku`, `barcode`, `low_stock`, `has_reserved`, `available_only`
+- `GET /api/inventory-stocks/low-stock`
+- `GET /api/stock-movements`
+  - `merchant_id`, `warehouse_id`, `warehouse_product_id`, `type`, `movement_type`, `reference_type`, `reference_id`, `order_id`, `date_from`, `date_to`
+- `GET /api/warehouse-products`
+  - `merchant_id`, `warehouse_id`, `sku`, `barcode`, `search`, `status`, `low_stock`
+- `GET /api/warehouse-products/low-stock`
+- `GET /api/warehouse-returns`
+  - `merchant_id`, `warehouse_id`, `order_id`, `shipment_id`, `warehouse_product_id`, `condition`, `status`, `date_from`, `date_to`
+- `GET /api/warehouse-receipts`
+  - `merchant_id`, `warehouse_id`, `status`, `receipt_number`, `date_from`, `date_to`
+- `GET /api/warehouse-transfers`
+  - `source_warehouse_id`, `destination_warehouse_id`, `status`, `transfer_number`, `date_from`, `date_to`
+
+### Stock Movement Types
+
+- Existing:
+  - `in`
+  - `out`
+  - `reserved`
+  - `released`
+  - `damaged`
+  - `adjustment`
+- Added:
+  - `stock_in`
+  - `return_received`
+  - `return_restocked`
+  - `return_damaged`
+  - `return_rejected`
+  - `stock_transfer_out`
+  - `stock_transfer_in`
+
+### Warehouse Complete Flow
+
+1. Create warehouse
+2. Create warehouse product
+3. Generate barcode
+4. Receive merchant stock
+5. Confirm receipt
+6. View inventory
+7. Create warehouse fulfillment order
+8. Reserve stock
+9. Pick
+10. Pack
+11. Ready for dispatch
+12. Fulfill from warehouse
+13. Shipment flow continues
+14. Return if needed
+15. Inspect return
+16. Restock, damage, or reject
+17. Review the stock movement audit trail
+
 ## Auth APIs
 
 ### POST `/api/auth/login`
@@ -32,6 +297,7 @@ Permission-denied response example:
 - Method: `POST`
 - Authentication: `No`
 - Purpose: Authenticates an internal user and returns a Sanctum token.
+- Rate limit: `throttle:auth-login` with the default limit sourced from `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE`.
 
 Request body example:
 
@@ -230,6 +496,96 @@ Success response example:
   }
 }
 ```
+
+## Orders And Shipments Final Integration Notes
+
+### Order lifecycle guardrails
+
+- Orders can still be created and confirmed through the existing APIs.
+- Orders cannot be edited or deleted after shipment creation.
+- Warehouse-fulfilled orders also become locked once warehouse processing starts, including stock reservation and later warehouse workflow stages.
+- `fulfillment_type` stored values remain:
+  - `pickup_from_merchant`
+  - `from_warehouse`
+  - `pickup_from_customer`
+- Input aliases remain accepted:
+  - `merchant_pickup`
+  - `warehouse_fulfillment`
+
+### Shipment creation safety
+
+- `POST /api/orders/{order}/shipments` remains the shipment creation endpoint.
+- Merchant-pickup orders can create shipments after confirmation.
+- Warehouse-fulfilled orders can create shipments only after `warehouse_fulfillment_status = fulfilled`.
+- Duplicate shipment creation is still blocked by both application validation and the unique `shipments.order_id` constraint.
+
+### Shipment status updates
+
+- `PATCH /api/shipments/{shipment}/status` is now limited to operational lifecycle updates.
+- Use `POST /api/shipments/{shipment}/complete-delivery` for:
+  - `delivered`
+  - `partially_delivered`
+  - `failed`
+- Warehouse-fulfilled return outcomes should be completed through item delivery results so the warehouse return lifecycle can continue safely.
+
+### Driver and manifest integration
+
+- `POST /api/shipments/{shipment}/assign-driver` keeps the same route and now moves `pending_pickup` shipments to `driver_assigned`.
+- Driver manifest generation keeps shipment assignment aligned with the selected driver and prevents loading a shipment already assigned to another driver.
+
+### Finance and warehouse return integration
+
+- Shipment delivery completion remains the integration point for:
+  - order item delivery results
+  - merchant wallet COD and fee transactions
+  - shipment status history
+- Returned warehouse items now create staged warehouse returns first.
+- Stock does not silently increase from shipment returns until the warehouse return is received, inspected, and restocked through the warehouse lifecycle.
+
+### Verified additive filters
+
+Orders index supports:
+
+- `date_from`
+- `date_to`
+- `merchant_id`
+- `merchant_name`
+- `status`
+- `delivery_status`
+- `order_type`
+- `fulfillment_type`
+- `payment_type`
+- `delivery_governorate_id`
+- `delivery_area_id`
+- `customer_phone`
+- `order_number`
+- `has_shipment`
+- `warehouse_fulfillment_status`
+- `search`
+
+Shipments index supports:
+
+- `date_from`
+- `date_to`
+- `merchant_id`
+- `driver_id` or `assigned_driver_id`
+- `status`
+- `shipment_number`
+- `search`
+- `delivery_governorate_id` or `governorate_id`
+- `delivery_area_id` or `area_id`
+- `payment_type`
+- `cod_only`
+
+Shipment print list supports:
+
+- `date`
+- `delivery_date` as an input alias to `date`
+- `assigned_driver_id`
+- `merchant_id`
+- `status`
+- `delivery_governorate_id`
+- `delivery_area_id`
 
 ## Settings APIs
 
@@ -644,7 +1000,7 @@ Common error response example:
 - `PATCH /api/shipments/{shipment}/status` requires `shipments.update_status`
 - `GET /api/merchant-payouts` requires `finance.payouts.view`
 - `POST /api/inventory-stocks/adjust` requires `inventory.adjust`
-- Public tracking stays public: `GET /api/track/{shipment_number}`
+- Public tracking stays public and redacted: `GET /api/track/{shipment_number}`
 
 ### GET `/api/roles`
 
@@ -2474,7 +2830,10 @@ Common error response example:
 - Method: `GET`
 - Authentication: `No`
 - Purpose: Public customer tracking endpoint using shipment number. This endpoint does not require Sanctum authentication.
+- Rate limit: `throttle:public-tracking` with the default limit sourced from `RATE_LIMIT_PUBLIC_TRACKING_PER_MINUTE`.
 - Response is intentionally limited to customer-safe shipment tracking data.
+- This route does not expose customer name, customer phone, full delivery address, merchant identifiers, driver data, finance data, warehouse data, or raw/internal notes.
+- `tracking_events` is the preferred timeline field. `histories` remains as a backward-compatible safe alias with the same redacted event shape.
 
 Success response example:
 
@@ -2483,22 +2842,46 @@ Success response example:
   "data": {
     "shipment_number": "SHP-20260424-000001",
     "status": "in_transit",
-    "customer_name": "Ahmed Adel",
+    "current_status": "in_transit",
+    "status_label": "In Transit",
     "delivery_governorate_name": "Cairo",
     "delivery_area_name": "Nasr City",
-    "delivery_address": "Building 10, Street 12, Cairo",
-    "histories": [
+    "latest_tracking_event": {
+      "status": "in_transit",
+      "current_status": "in_transit",
+      "status_label": "In Transit",
+      "created_at": "2026-04-24T15:30:00.000000Z"
+    },
+    "tracking_events": [
       {
         "status": "pending_pickup",
-        "notes": "Shipment created from order.",
+        "current_status": "pending_pickup",
+        "status_label": "Pending Pickup",
         "created_at": "2026-04-24T15:00:00.000000Z"
       },
       {
         "status": "in_transit",
-        "notes": "Shipment left the sorting hub.",
+        "current_status": "in_transit",
+        "status_label": "In Transit",
         "created_at": "2026-04-24T15:30:00.000000Z"
       }
-    ]
+    ],
+    "histories": [
+      {
+        "status": "pending_pickup",
+        "current_status": "pending_pickup",
+        "status_label": "Pending Pickup",
+        "created_at": "2026-04-24T15:00:00.000000Z"
+      },
+      {
+        "status": "in_transit",
+        "current_status": "in_transit",
+        "status_label": "In Transit",
+        "created_at": "2026-04-24T15:30:00.000000Z"
+      }
+    ],
+    "created_at": "2026-04-24T15:00:00.000000Z",
+    "updated_at": "2026-04-24T15:30:00.000000Z"
   }
 }
 ```
@@ -4460,6 +4843,7 @@ Success response example:
 - Method: `GET`
 - Authentication: `Yes`
 - Purpose: Returns one merchant invoice.
+- Response does not expose the raw stored invoice file path. Use the dedicated preview or download endpoints.
 
 ### PUT `/api/merchant-invoices/{merchantInvoice}`
 
@@ -5006,7 +5390,6 @@ Success response example:
       "date_to": "2026-05-31"
     },
     "status": "completed",
-    "file_path": "exports/shipments-20260523-101500-ab12cd.csv",
     "download_url": "http://localhost/api/exports/1/download",
     "generated_by_name": "Admin User",
     "generated_at": "2026-05-23T10:15:00.000000Z",
@@ -5035,6 +5418,7 @@ Success response example:
 - Authentication: `Yes`
 - Permission: `exports.view`
 - Purpose: Returns one export log record.
+- Response does not expose the raw stored file path. Use `download_url` for access.
 
 ### GET `/api/exports/{exportLog}/download`
 
@@ -5096,7 +5480,6 @@ Success response example:
     "attachable_id": 5,
     "file_name": "b6bb3c4d-58a0-4a26-91d2-8e1d85b336cf.pdf",
     "original_name": "receipt.pdf",
-    "file_path": "attachments/expenses/b6bb3c4d-58a0-4a26-91d2-8e1d85b336cf.pdf",
     "mime_type": "application/pdf",
     "file_size": 204800,
     "category": "receipt",
@@ -5126,6 +5509,7 @@ Success response example:
 - Authentication: `Yes`
 - Permission: `attachments.view`
 - Purpose: Returns one attachment record.
+- Response does not expose the raw stored file path. Use `download_url` for access.
 
 ### GET `/api/attachments/{attachment}/download`
 
@@ -5364,6 +5748,7 @@ Authentication error examples:
 - Method: `GET`
 - Authentication: `Merchant integration token`
 - Purpose: Test connection endpoint for future plugins.
+- Rate limit: `throttle:integration-api` with the default limit sourced from `RATE_LIMIT_INTEGRATION_PER_MINUTE`.
 
 Success response example:
 
@@ -5390,10 +5775,12 @@ Success response example:
 - Authentication: `Merchant integration token`
 - Required token permission: `orders.create`
 - Purpose: Allows a future plugin to create an order for the merchant linked to the token.
+- Rate limit: `throttle:integration-api` with the default limit sourced from `RATE_LIMIT_INTEGRATION_PER_MINUTE`.
 
 Important behavior:
 
 - `merchant_id` is taken from the token merchant and cannot be spoofed from request body.
+- If `merchant_id` is submitted in the payload, the API returns `422`.
 - `source` is stored as `integration`.
 - Duplicate import is blocked for the same `merchant_id + external_source + external_order_id`.
 - When shipping rate resolution fails and review fallback is enabled, the order is created with `requires_review = true` and `status = pending_review`.
@@ -5422,6 +5809,19 @@ Request body example:
       "unit_price": 500
     }
   ]
+}
+```
+
+Validation error example:
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "merchant_id": [
+      "The merchant id field is prohibited."
+    ]
+  }
 }
 ```
 
@@ -5757,3 +6157,988 @@ Success response example:
   }
 }
 ```
+## Universal Label Printing
+
+The backend now supports additive label rendering for warehouse products, shipments, orders, warehouse bins, and driver manifests. The backend only returns printable content. It does not attempt to print directly to a client-side printer.
+
+### Supported Formats
+
+- `html`
+- `pdf`
+- `zpl`
+- `tspl`
+- `json`
+
+Format resolution rules:
+
+- If `format` is passed in the query string or request body, it is used.
+- If `format` is omitted, the system uses the `default_label_format` setting.
+- Invalid formats return a standard Laravel `422` validation response.
+
+### PDF Limitation In This Phase
+
+No Composer PDF package was added. PDF label output uses the existing lightweight raw-PDF approach already used by invoices, adapted for fixed-size labels. That means:
+
+- PDF labels are printable and size-aware.
+- PDF labels show barcode values as text.
+- HTML is preferred for browser printing.
+- ZPL/TSPL are preferred for barcode-capable thermal label printers.
+
+### New Label Endpoints
+
+Warehouse product labels:
+
+- `GET /api/warehouse-products/{warehouseProduct}/label`
+- `POST /api/warehouse-products/labels/bulk`
+
+Existing warehouse product barcode-label endpoints remain available and backward compatible:
+
+- `GET /api/warehouse-products/{warehouseProduct}/barcode-label`
+- `POST /api/warehouse-products/barcode-labels/bulk`
+
+Shipment / waybill labels:
+
+- `GET /api/shipments/{shipment}/label`
+- `GET /api/shipments/{shipment}/waybill`
+- `POST /api/shipments/labels/bulk`
+
+Order labels:
+
+- `GET /api/orders/{order}/label`
+
+Warehouse bin labels:
+
+- `GET /api/warehouse-bins/{warehouseBin}/label`
+
+Generic preview / settings:
+
+- `GET /api/labels/templates`
+- `GET /api/labels/settings`
+- `POST /api/labels/preview`
+- `POST /api/labels/test`
+
+Driver manifest print remains backward compatible:
+
+- `GET /api/driver-manifests/{manifest}/print`
+
+If no `format` is supplied on manifest print, the existing JSON response remains unchanged. If `format=html|pdf|json` is supplied, the route returns additive formatted output.
+
+### Common Query Parameters
+
+- `format=html|pdf|zpl|tspl|json`
+- `width_mm=...`
+- `height_mm=...`
+- `download=1`
+
+### Label Settings
+
+The following settings were added under the labels group:
+
+- `default_label_format`
+- `default_label_width_mm`
+- `default_label_height_mm`
+- `product_label_width_mm`
+- `product_label_height_mm`
+- `shipment_label_width_mm`
+- `shipment_label_height_mm`
+- `order_label_width_mm`
+- `order_label_height_mm`
+- `bin_label_width_mm`
+- `bin_label_height_mm`
+- `printer_dpi`
+- `label_margin_mm`
+- `zpl_darkness`
+- `zpl_speed`
+- `tspl_density`
+- `tspl_speed`
+- `label_company_name_enabled`
+- `label_logo_enabled`
+- `label_qr_enabled`
+- `label_barcode_human_readable`
+
+### Example Requests
+
+Warehouse product label:
+
+```http
+GET /api/warehouse-products/1/label?format=zpl
+```
+
+Shipment waybill:
+
+```http
+GET /api/shipments/1/waybill?format=html
+```
+
+Order label using default format:
+
+```http
+GET /api/orders/1/label
+```
+
+Bulk shipment labels:
+
+```json
+{
+  "format": "tspl",
+  "shipment_ids": [1, 2, 3]
+}
+```
+
+Generic preview:
+
+```json
+{
+  "label_type": "shipment",
+  "format": "json"
+}
+```
+
+## Merchant Portal Phase 1
+
+Merchant Portal Phase 1 introduces a secure merchant-facing API layer using `merchant_users` memberships.
+
+Core decisions:
+
+- one merchant can have multiple portal users
+- one portal user belongs to one merchant context for now
+- no multi-merchant switching
+- no `available_merchants`
+- no switch-merchant endpoint
+- merchant portal context always comes from authenticated membership
+
+### Merchant Portal Roles
+
+- `owner`
+- `admin`
+- `staff`
+- `accountant`
+- `warehouse_viewer`
+
+Portal roles are separate from internal/global roles.
+
+- Internal roles continue to use the global permission system.
+- Merchant portal roles only control merchant-scoped capabilities inside `/api/merchant-portal/*`.
+
+### Merchant Portal Statuses
+
+- `invited`
+- `active`
+- `suspended`
+
+Access rules:
+
+- `active` membership + active merchant = allowed
+- `invited`, `suspended`, soft-deleted membership = `403`
+- internal user without membership = `403`
+- unauthenticated request = `401`
+
+### Merchant Membership Validation
+
+The `merchant_users` table stores:
+
+- `merchant_id`
+- `user_id`
+- `role`
+- `status`
+- `is_primary`
+- `invited_by`
+- `invited_at`
+- `accepted_at`
+- `last_login_at`
+- timestamps
+- soft deletes
+
+Validation rules:
+
+- merchant must exist, be active, and not be deleted
+- user must exist and not be deleted
+- role must be valid
+- status must be valid
+- same user cannot have more than one non-deleted merchant portal membership at a time
+- same user cannot be linked twice to the same merchant
+- soft-deleted same-merchant memberships are restored instead of duplicated
+- merchant cannot have more than one active primary owner
+- only active owner cannot be suspended, deleted, or demoted unless another active owner exists
+
+### Merchant Portal Authentication
+
+Merchant portal users use the existing Sanctum login:
+
+- `POST /api/auth/login`
+
+No new auth guard was introduced.
+
+### Merchant Portal Scoping Rule
+
+For all `/api/merchant-portal/*` routes:
+
+- `merchant_id` in query string is rejected with `422`
+- `merchant_id` in request body is rejected with `422`
+- merchant context is always derived from the authenticated membership
+
+### GET `/api/merchant-portal/me`
+
+- Method: `GET`
+- Authentication: `Yes`
+- Middleware: `auth:sanctum` + merchant portal access
+- Purpose: returns the authenticated merchant portal context
+
+Success response example:
+
+```json
+{
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "Merchant User",
+      "email": "merchant@example.com"
+    },
+    "merchant": {
+      "id": 10,
+      "name": "ABC Store",
+      "company_name": "ABC Store LLC",
+      "phone": "01000000000",
+      "email": "ops@abcstore.com",
+      "address": "Nasr City, Cairo",
+      "status": "active"
+    },
+    "portal_role": "owner",
+    "portal_status": "active",
+    "capabilities": [
+      "profile.view",
+      "users.manage",
+      "orders.view",
+      "finance.view"
+    ]
+  }
+}
+```
+
+Notes:
+
+- returns only the current merchant
+- does not return switch options
+- updates `last_login_at`
+
+### GET `/api/merchant-portal/profile`
+
+- Method: `GET`
+- Authentication: `Yes`
+- Middleware: merchant portal access
+- Purpose: returns the current merchant profile in a portal-safe shape
+
+This endpoint does not expose:
+
+- pricing plan fields
+- wallet balances
+- internal notes
+- internal finance configuration
+
+### Internal Merchant Portal User Management
+
+Permission:
+
+- `merchant_portal_users.manage`
+
+Endpoints:
+
+- `GET /api/merchants/{merchant}/portal-users`
+- `POST /api/merchants/{merchant}/portal-users`
+- `GET /api/merchants/{merchant}/portal-users/{merchantUser}`
+- `PUT /api/merchants/{merchant}/portal-users/{merchantUser}`
+- `DELETE /api/merchants/{merchant}/portal-users/{merchantUser}`
+- `POST /api/merchants/{merchant}/portal-users/{merchantUser}/suspend`
+- `POST /api/merchants/{merchant}/portal-users/{merchantUser}/activate`
+
+Rules:
+
+- route merchant and merchant user must match
+- inactive merchants cannot receive portal users
+- `merchant_id` in payload is prohibited
+- portal user creation can either link an existing user or create a new user
+- new user creation validates `name`, `email`, `password`, and `password_confirmation`
+- existing user linking validates `user_id`
+
+Create payload with existing user:
+
+```json
+{
+  "user_id": 25,
+  "role": "staff",
+  "status": "active",
+  "is_primary": false
+}
+```
+
+Create payload with new user:
+
+```json
+{
+  "name": "Merchant Accountant",
+  "email": "accounting@merchant.com",
+  "password": "secret123",
+  "password_confirmation": "secret123",
+  "role": "accountant",
+  "status": "invited",
+  "is_primary": false
+}
+```
+
+### Merchant Portal Capabilities
+
+Phase 1 capability summary:
+
+- `owner`: full phase-1 merchant portal access
+- `admin`: operational + finance + integrations
+- `staff`: operational orders/shipments
+- `accountant`: finance/invoices/payout request
+- `warehouse_viewer`: warehouse/shipment/label visibility
+
+## Merchant Portal Phase 2
+
+Merchant Portal Phase 2 adds merchant-facing order and shipment APIs on top of the Phase 1 merchant context and security model.
+
+Core security rules:
+
+- all `/api/merchant-portal/*` routes require `auth:sanctum` and merchant portal middleware
+- merchant context comes only from the authenticated `merchant_users` membership
+- `merchant_id` in query string or request body is rejected with `422`
+- merchant portal users can only access records that belong to their own merchant
+- cross-merchant order and shipment lookups return `404`
+- shipment mutation remains internal-only in this phase
+
+### Merchant Portal Capabilities Used In Phase 2
+
+- `orders.view`
+- `orders.create`
+- `orders.update`
+- `shipments.view`
+- `labels.print`
+
+### Merchant Portal Orders
+
+Endpoints:
+
+- `GET /api/merchant-portal/orders`
+- `POST /api/merchant-portal/orders`
+- `GET /api/merchant-portal/orders/{order}`
+- `PUT /api/merchant-portal/orders/{order}`
+- `POST /api/merchant-portal/orders/{order}/confirm`
+- `POST /api/merchant-portal/orders/{order}/cancel`
+- `GET /api/merchant-portal/orders/{order}/label`
+
+Important behavior:
+
+- `merchant_id` is never accepted from merchant portal requests
+- `source` is not accepted from the portal create/update payload
+- because `OrderSource` currently only supports `manual` and `integration`, merchant portal orders are stored with `source = manual`
+- order create reuses the existing order creation flow
+- order confirm reuses the existing order confirm flow
+- order update reuses the existing lifecycle safety rules
+- order cancel is merchant-safe only before shipment creation and before warehouse work moves beyond releasable reservation
+- if a warehouse order still has active reserved stock, the cancel flow releases the reservation before setting the order to `cancelled`
+
+Allowed order list filters:
+
+- `date_from`
+- `date_to`
+- `status`
+- `fulfillment_type`
+- `payment_type`
+- `order_type`
+- `customer_phone`
+- `order_number`
+- `search`
+- `has_shipment`
+- `warehouse_fulfillment_status`
+- `delivery_governorate_id`
+- `delivery_area_id`
+
+Forbidden order portal inputs:
+
+- `merchant_id`
+- `source`
+- `status`
+- `requires_review`
+- `review_reason`
+- `external_source`
+- `external_order_id`
+- `external_order_number`
+- `warehouse_fulfillment_status`
+
+Merchant portal order create example:
+
+```json
+{
+  "customer_name": "Portal Customer",
+  "customer_phone": "01050000000",
+  "delivery_governorate_id": 1,
+  "delivery_area_id": 2,
+  "delivery_address": "Nasr City",
+  "payment_type": "cod",
+  "shipping_fee": 55,
+  "cod_amount": 250,
+  "fulfillment_type": "pickup_from_merchant",
+  "items": [
+    {
+      "product_name": "Portal Item",
+      "quantity": 2,
+      "unit_price": 125
+    }
+  ]
+}
+```
+
+Merchant portal order list item example:
+
+```json
+{
+  "id": 10,
+  "order_number": "ORD-20260531-000010",
+  "status": "confirmed",
+  "status_label": "Confirmed",
+  "fulfillment_type": "pickup_from_merchant",
+  "payment_type": "cod",
+  "order_type": "delivery",
+  "customer_name": "Portal Customer",
+  "customer_phone": "01050000000",
+  "delivery_location_summary": {
+    "governorate_id": 1,
+    "governorate_name": "Cairo",
+    "area_id": 2,
+    "area_name": "Nasr City",
+    "address": "Nasr City"
+  },
+  "cod_amount": "250.00",
+  "shipping_fee": "55.00",
+  "total_amount": "305.00",
+  "has_shipment": false,
+  "shipment_summary": null,
+  "warehouse_fulfillment_status": "not_required",
+  "created_at": "2026-05-31T12:00:00.000000Z"
+}
+```
+
+### Merchant Portal Shipments
+
+Endpoints:
+
+- `GET /api/merchant-portal/shipments`
+- `GET /api/merchant-portal/shipments/{shipment}`
+- `GET /api/merchant-portal/shipments/{shipment}/tracking`
+- `GET /api/merchant-portal/shipments/{shipment}/label`
+- `GET /api/merchant-portal/shipments/{shipment}/waybill`
+
+Important behavior:
+
+- shipments are read-only in merchant portal Phase 2
+- merchant portal does not expose:
+  - assign driver
+  - update shipment status
+  - complete delivery
+  - delivery attempt creation
+  - manifest closing
+- shipment label and waybill reuse the existing Label module
+
+Allowed shipment filters:
+
+- `date_from`
+- `date_to`
+- `status`
+- `shipment_number`
+- `search`
+- `customer_phone`
+- `payment_type`
+- `cod_only`
+- `delivery_governorate_id`
+- `delivery_area_id`
+- `has_driver`
+
+Forbidden shipment portal inputs:
+
+- `merchant_id`
+- `driver_id`
+- `assigned_driver_id`
+
+Merchant portal shipment list item example:
+
+```json
+{
+  "id": 22,
+  "shipment_number": "SHP-20260531-000022",
+  "status": "out_for_delivery",
+  "status_label": "Out For Delivery",
+  "order_number": "ORD-20260531-000010",
+  "customer_name": "Portal Customer",
+  "customer_phone": "01050000000",
+  "delivery_location_summary": {
+    "governorate_id": 1,
+    "governorate_name": "Cairo",
+    "area_id": 2,
+    "area_name": "Nasr City",
+    "address": "Nasr City"
+  },
+  "cod_amount": "250.00",
+  "payment_type": "cod",
+  "assigned_driver_summary": {
+    "id": 5,
+    "name": "Driver 5"
+  },
+  "last_delivery_attempt_summary": null,
+  "created_at": "2026-05-31T13:00:00.000000Z"
+}
+```
+
+### Merchant Portal Tracking
+
+- `GET /api/merchant-portal/shipments/{shipment}/tracking`
+- authenticated merchant tracking can return more than public tracking, but it still avoids internal finance and reconciliation fields
+- tracking remains scoped to the authenticated merchant only
+
+### Merchant Portal Labels
+
+- `GET /api/merchant-portal/orders/{order}/label`
+- `GET /api/merchant-portal/shipments/{shipment}/label`
+- `GET /api/merchant-portal/shipments/{shipment}/waybill`
+
+Supported label formats remain:
+
+- `html`
+- `pdf`
+- `zpl`
+- `tspl`
+- `json`
+
+`labels.print` is required for merchant portal label endpoints.
+
+### Merchant Portal Warehouse Phase 3A
+
+All Merchant Portal warehouse endpoints:
+
+- require `auth:sanctum`
+- require active merchant portal membership through the Phase 1 middleware
+- derive merchant context only from the authenticated merchant membership
+- reject `merchant_id` in query string or request body with `422`
+
+Critical stock rule:
+
+- merchant inbound stock requests do **not** increase inventory
+- merchant inbound stock requests do **not** create stock movements
+- inventory increases only when internal warehouse staff confirms a real warehouse receipt
+
+#### Merchant Portal Warehouse Products
+
+Endpoints:
+
+- `GET /api/merchant-portal/warehouse/products`
+- `GET /api/merchant-portal/warehouse/products/{warehouseProduct}`
+- `GET /api/merchant-portal/warehouse/products/{warehouseProduct}/label`
+- `POST /api/merchant-portal/warehouse/products/labels/bulk`
+
+Required capabilities:
+
+- `warehouse.view`
+- `labels.print` for label endpoints
+
+Allowed product filters:
+
+- `search`
+- `sku`
+- `barcode`
+- `status`
+- `low_stock`
+- `warehouse_id`
+- `has_stock`
+- `created_from`
+- `created_to`
+
+Forbidden:
+
+- `merchant_id`
+
+#### Merchant Portal Inventory
+
+Endpoints:
+
+- `GET /api/merchant-portal/warehouse/inventory`
+- `GET /api/merchant-portal/warehouse/inventory/low-stock`
+- `GET /api/merchant-portal/warehouse/inventory/{inventoryStock}`
+
+Required capability:
+
+- `warehouse.view`
+
+Allowed inventory filters:
+
+- `warehouse_id`
+- `warehouse_product_id`
+- `sku`
+- `barcode`
+- `low_stock`
+- `has_reserved`
+- `available_only`
+- `search`
+
+Forbidden:
+
+- `merchant_id`
+
+#### Merchant Portal Stock Movements
+
+Endpoint:
+
+- `GET /api/merchant-portal/warehouse/movements`
+
+Required capability:
+
+- `warehouse.view`
+
+Allowed movement filters:
+
+- `warehouse_id`
+- `warehouse_product_id`
+- `movement_type`
+- `reference_type`
+- `reference_id`
+- `order_id`
+- `date_from`
+- `date_to`
+- `sku`
+- `barcode`
+
+Forbidden:
+
+- `merchant_id`
+
+Merchant-safe movement notes:
+
+- internal adjustment notes are not exposed through the merchant portal
+
+#### Merchant Portal Warehouse Charges
+
+Endpoint:
+
+- `GET /api/merchant-portal/warehouse/charges`
+
+Required capability:
+
+- `warehouse.view`
+
+Allowed charge filters:
+
+- `date_from`
+- `date_to`
+- `charge_type`
+- `status`
+- `warehouse_id`
+- `search`
+
+Forbidden:
+
+- `merchant_id`
+
+Warehouse charges are read-only in Phase 3A.
+
+#### Merchant Portal Inbound Stock Requests
+
+Endpoints:
+
+- `GET /api/merchant-portal/warehouse/inbound-requests`
+- `POST /api/merchant-portal/warehouse/inbound-requests`
+- `GET /api/merchant-portal/warehouse/inbound-requests/{inboundRequest}`
+- `POST /api/merchant-portal/warehouse/inbound-requests/{inboundRequest}/cancel`
+
+Required capabilities:
+
+- `warehouse.inbound_requests.view`
+- `warehouse.inbound_requests.create`
+- `warehouse.inbound_requests.cancel`
+
+Allowed inbound request filters:
+
+- `status`
+- `request_number`
+- `date_from`
+- `date_to`
+- `warehouse_id`
+- `expected_arrival_from`
+- `expected_arrival_to`
+
+Forbidden:
+
+- `merchant_id`
+
+Inbound request create payload rules:
+
+- `warehouse_id` is optional but must exist when provided
+- `expected_arrival_date` is optional
+- `items` is required and must contain at least one item
+- each item must either:
+  - reference an existing `warehouse_product_id` that belongs to the current merchant
+  - or provide both `requested_product_name` and `requested_sku`
+
+### Merchant Portal Finance Phase 3B
+
+All Merchant Portal finance endpoints:
+
+- require `auth:sanctum`
+- require active merchant portal membership through the Phase 1 middleware
+- derive merchant context only from the authenticated merchant membership
+- reject `merchant_id` in query string or request body with `422`
+- return merchant-scoped data only
+
+Merchant finance stays read-only except for payout requests.
+
+Merchants cannot:
+
+- create or approve wallet transactions
+- create, update, or delete invoices
+- approve, reject, complete, or delete payouts
+- view company profit summaries
+- view reconciliation-only internal finance data
+
+#### Merchant Portal Finance Summary
+
+Endpoint:
+
+- `GET /api/merchant-portal/finance/summary`
+
+Required capability:
+
+- `finance.view`
+
+Allowed filters:
+
+- `date_from`
+- `date_to`
+
+Forbidden:
+
+- `merchant_id`
+
+Merchant-safe response summary includes:
+
+- `available_balance`
+- `pending_balance`
+- `total_cod_collected`
+- `total_shipping_fees`
+- `total_warehouse_charges`
+- `total_payouts_pending`
+- `total_payouts_completed`
+- `total_invoices`
+- `unpaid_invoices_count`
+- `pending_payouts_count`
+- `last_payout`
+- `latest_invoice`
+
+#### Merchant Portal Wallet
+
+Endpoints:
+
+- `GET /api/merchant-portal/finance/wallet/summary`
+- `GET /api/merchant-portal/finance/wallet/transactions`
+- `GET /api/merchant-portal/finance/wallet/transactions/{transaction}`
+
+Required capability:
+
+- `finance.view`
+
+Allowed wallet transaction filters:
+
+- `date_from`
+- `date_to`
+- `type`
+- `direction`
+- `status`
+- `reference_type`
+- `search`
+
+Forbidden:
+
+- `merchant_id`
+
+Wallet routes are read-only in the merchant portal.
+
+#### Merchant Portal Invoices
+
+Endpoints:
+
+- `GET /api/merchant-portal/finance/invoices`
+- `GET /api/merchant-portal/finance/invoices/{invoice}`
+- `GET /api/merchant-portal/finance/invoices/{invoice}/preview`
+- `GET /api/merchant-portal/finance/invoices/{invoice}/download`
+
+Required capabilities:
+
+- `invoices.view`
+- `invoices.download` for download when the role has that dedicated capability
+
+Allowed invoice filters:
+
+- `date_from`
+- `date_to`
+- `status`
+- `invoice_number`
+- `search`
+
+Forbidden:
+
+- `merchant_id`
+
+Notes:
+
+- invoice preview and download reuse the existing invoice services
+- download remains PDF-based through the existing invoice file generation path
+
+#### Merchant Portal Payouts
+
+Endpoints:
+
+- `GET /api/merchant-portal/finance/payouts`
+- `GET /api/merchant-portal/finance/payouts/{payout}`
+- `POST /api/merchant-portal/finance/payouts/request`
+
+Required capabilities:
+
+- `payouts.view`
+- `payouts.request`
+
+Allowed payout list filters:
+
+- `date_from`
+- `date_to`
+- `status`
+- `payout_number`
+- `search`
+
+Forbidden:
+
+- `merchant_id`
+
+Payout request rules:
+
+- `amount` is required and must be positive
+- payout amount must not exceed merchant available balance
+- request always creates `pending` payout status
+- request does not approve or complete the payout
+- optional bank fields are stored as merchant-facing notes because the existing payout schema remains unchanged
+
+Merchant portal payout requests do not create direct wallet or treasury side effects.
+- duplicate `warehouse_product_id` values in the same request are rejected
+- duplicate requested SKU values in the same request are rejected
+- quantity must be at least `1`
+
+### Merchant Portal Final Completion
+
+The final Merchant Portal completion phase adds:
+
+- `GET /api/merchant-portal/dashboard/summary`
+- `GET|PUT /api/merchant-portal/profile`
+- `GET|PUT /api/merchant-portal/settings`
+- merchant integration token management endpoints
+- merchant-scoped export endpoints
+- merchant-scoped attachment endpoints
+- merchant notification endpoints
+
+Final-phase security rules:
+
+- all routes remain under `auth:sanctum` plus merchant portal middleware
+- `merchant_id` continues to be rejected in portal query/body payloads
+- dashboard, integrations, exports, attachments, and notifications all resolve merchant scope from the authenticated membership only
+- cross-merchant lookups return `404`
+
+New capability areas:
+
+- `dashboard.view`
+- `integrations.view`
+- `integrations.manage`
+- `exports.view`
+- `exports.create`
+- `exports.download`
+- `attachments.view`
+- `attachments.upload`
+- `attachments.download`
+- `attachments.delete`
+- `notifications.view`
+
+See the dedicated portal guide for the full final API surface:
+
+- `docs/merchant-portal-api-documentation.md`
+
+Inbound request statuses used in Phase 3A:
+
+- `submitted`
+- `cancelled`
+- `approved`
+- `partially_received`
+- `received`
+- `rejected`
+- `closed`
+
+Inbound request detail example:
+
+```json
+{
+  "data": {
+    "id": 14,
+    "request_number": "MIR-20260531-000014",
+    "status": "submitted",
+    "warehouse_summary": {
+      "id": 2,
+      "name": "Main Warehouse"
+    },
+    "items": [
+      {
+        "id": 1,
+        "warehouse_product_id": 11,
+        "product_name": "Blue T-Shirt",
+        "sku": "TS-BLUE-001",
+        "quantity": 50,
+        "notes": "Existing SKU"
+      },
+      {
+        "id": 2,
+        "warehouse_product_id": null,
+        "product_name": "New Product",
+        "sku": "NP-001",
+        "quantity": 20,
+        "notes": "New SKU not yet created"
+      }
+    ],
+    "linked_warehouse_receipt_summary": null,
+    "expected_arrival_date": "2026-06-10",
+    "submitted_at": "2026-05-31T14:00:00.000000Z",
+    "cancelled_at": null,
+    "received_at": null,
+    "closed_at": null,
+    "notes": "Sending goods tomorrow",
+    "allowed_actions": {
+      "can_cancel": true
+    },
+    "created_at": "2026-05-31T14:00:00.000000Z"
+  }
+}
+```
+
+#### Internal Merchant Inbound Review
+
+Internal review endpoints added for operations:
+
+- `GET /api/merchant-inbound-stock-requests`
+- `GET /api/merchant-inbound-stock-requests/{inboundRequest}`
+- `POST /api/merchant-inbound-stock-requests/{inboundRequest}/approve`
+- `POST /api/merchant-inbound-stock-requests/{inboundRequest}/reject`
+- `POST /api/merchant-inbound-stock-requests/{inboundRequest}/link-warehouse-receipt`
+
+Required internal permissions:
+
+- `merchant_inbound_requests.view`
+- `merchant_inbound_requests.manage`
+
+Linking an inbound request to a confirmed warehouse receipt can move the inbound request to:
+
+- `received`
+- `partially_received`
+
+Linking a request to a receipt still does not replace warehouse receipt confirmation as the stock-in authority.

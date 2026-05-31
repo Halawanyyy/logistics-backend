@@ -36,7 +36,7 @@ class AuthController
             );
 
             return response()->json([
-                'message' => 'Invalid credentials',
+                'message' => __('auth.invalid_credentials'),
             ], 401);
         }
 
@@ -54,7 +54,7 @@ class AuthController
         );
 
         return response()->json([
-            'message' => 'Login successful',
+            'message' => __('auth.login_successful'),
             'token' => $token,
             'user' => $user,
         ]);
@@ -84,7 +84,7 @@ class AuthController
         }
 
         return response()->json([
-            'message' => 'Logged out successfully',
+            'message' => __('auth.logout_successful'),
         ]);
 }
 

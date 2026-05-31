@@ -2,6 +2,7 @@
 
 namespace App\Modules\Attachment\Models;
 
+use App\Models\Merchant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +17,7 @@ class Attachment extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'merchant_id',
         'attachable_type',
         'attachable_id',
         'file_name',
@@ -26,6 +28,7 @@ class Attachment extends Model
         'category',
         'notes',
         'uploaded_by',
+        'merchant_uploaded',
     ];
 
     /**
@@ -35,6 +38,7 @@ class Attachment extends Model
     {
         return [
             'file_size' => 'integer',
+            'merchant_uploaded' => 'boolean',
             'deleted_at' => 'datetime',
         ];
     }
@@ -47,5 +51,10 @@ class Attachment extends Model
     public function uploadedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    public function merchant(): BelongsTo
+    {
+        return $this->belongsTo(Merchant::class);
     }
 }

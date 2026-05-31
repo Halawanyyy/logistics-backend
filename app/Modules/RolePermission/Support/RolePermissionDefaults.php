@@ -52,6 +52,13 @@ class RolePermissionDefaults
                 'is_system' => true,
                 'status' => 'active',
             ],
+            [
+                'name' => 'Merchant Portal',
+                'slug' => 'merchant_portal',
+                'description' => 'Merchant-facing portal access without internal permissions.',
+                'is_system' => true,
+                'status' => 'active',
+            ],
         ];
     }
 
@@ -95,6 +102,9 @@ class RolePermissionDefaults
             ['module' => 'Merchants', 'name' => 'Create Merchants', 'slug' => 'merchants.create', 'description' => 'Create merchants.'],
             ['module' => 'Merchants', 'name' => 'Update Merchants', 'slug' => 'merchants.update', 'description' => 'Update merchants.'],
             ['module' => 'Merchants', 'name' => 'Delete Merchants', 'slug' => 'merchants.delete', 'description' => 'Delete merchants.'],
+            ['module' => 'Merchants', 'name' => 'Manage Merchant Portal Users', 'slug' => 'merchant_portal_users.manage', 'description' => 'Create, update, suspend, activate, and delete merchant portal users.'],
+            ['module' => 'Merchants', 'name' => 'View Merchant Inbound Requests', 'slug' => 'merchant_inbound_requests.view', 'description' => 'View merchant inbound stock requests.'],
+            ['module' => 'Merchants', 'name' => 'Manage Merchant Inbound Requests', 'slug' => 'merchant_inbound_requests.manage', 'description' => 'Approve, reject, and link merchant inbound stock requests.'],
 
             ['module' => 'Locations & Pricing', 'name' => 'View Locations', 'slug' => 'locations.view', 'description' => 'View governorates and areas.'],
             ['module' => 'Locations & Pricing', 'name' => 'Create Locations', 'slug' => 'locations.create', 'description' => 'Create governorates and areas.'],
@@ -129,6 +139,9 @@ class RolePermissionDefaults
 
             ['module' => 'Barcodes', 'name' => 'Lookup Barcodes', 'slug' => 'barcodes.lookup', 'description' => 'Lookup barcodes across supported entities.'],
             ['module' => 'Barcodes', 'name' => 'Scan Barcodes', 'slug' => 'barcodes.scan', 'description' => 'Scan barcodes for operational actions.'],
+            ['module' => 'Labels', 'name' => 'View Label Templates', 'slug' => 'labels.view', 'description' => 'View label settings and supported templates.'],
+            ['module' => 'Labels', 'name' => 'Preview Labels', 'slug' => 'labels.preview', 'description' => 'Preview and test label rendering output.'],
+            ['module' => 'Labels', 'name' => 'Print Labels', 'slug' => 'labels.print', 'description' => 'Access label printing flows.'],
 
             ['module' => 'Drivers', 'name' => 'View Drivers', 'slug' => 'drivers.view', 'description' => 'View drivers.'],
             ['module' => 'Drivers', 'name' => 'Create Drivers', 'slug' => 'drivers.create', 'description' => 'Create drivers.'],
@@ -257,6 +270,9 @@ class RolePermissionDefaults
                 'merchants.create',
                 'merchants.update',
                 'merchants.delete',
+                'merchant_portal_users.manage',
+                'merchant_inbound_requests.view',
+                'merchant_inbound_requests.manage',
                 'locations.view',
                 'locations.create',
                 'locations.update',
@@ -287,6 +303,9 @@ class RolePermissionDefaults
                 'shipments.return_to_warehouse',
                 'barcodes.lookup',
                 'barcodes.scan',
+                'labels.view',
+                'labels.preview',
+                'labels.print',
                 'drivers.view',
                 'drivers.create',
                 'drivers.update',
@@ -391,6 +410,7 @@ class RolePermissionDefaults
                 'merchants.view',
                 'merchants.create',
                 'merchants.update',
+                'merchant_inbound_requests.view',
                 'locations.view',
                 'shipping_rates.view',
                 'pricing_plans.view',
@@ -406,6 +426,9 @@ class RolePermissionDefaults
                 'shipments.print',
                 'barcodes.lookup',
                 'barcodes.scan',
+                'labels.view',
+                'labels.preview',
+                'labels.print',
                 'drivers.view',
                 'drivers.manifest',
                 'driver_manifests.view',
@@ -429,12 +452,17 @@ class RolePermissionDefaults
                 'attachments.delete',
                 'barcodes.lookup',
                 'barcodes.scan',
+                'labels.view',
+                'labels.preview',
+                'labels.print',
                 'warehouses.view',
                 'warehouses.create',
                 'warehouses.update',
                 'warehouse_products.view',
                 'warehouse_products.create',
                 'warehouse_products.update',
+                'merchant_inbound_requests.view',
+                'merchant_inbound_requests.manage',
                 'inventory.view',
                 'inventory.adjust',
                 'inventory.reserve',
@@ -524,6 +552,7 @@ class RolePermissionDefaults
                 'shipments.view',
                 'barcodes.lookup',
             ],
+            'merchant_portal' => [],
         ];
     }
 }

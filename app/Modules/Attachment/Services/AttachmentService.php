@@ -35,6 +35,7 @@ class AttachmentService
         Storage::disk('attachments')->putFileAs($directory, $file, $fileName);
 
         $attachment = Attachment::query()->create([
+            'merchant_id' => $payload['merchant_id'] ?? null,
             'attachable_type' => (string) $payload['attachable_type'],
             'attachable_id' => (int) $payload['attachable_id'],
             'file_name' => $fileName,
@@ -45,6 +46,7 @@ class AttachmentService
             'category' => $payload['category'] ?? null,
             'notes' => $payload['notes'] ?? null,
             'uploaded_by' => $uploadedBy,
+            'merchant_uploaded' => (bool) ($payload['merchant_uploaded'] ?? false),
         ]);
 
         $this->auditLogService->log(
@@ -112,9 +114,22 @@ class AttachmentService
 
     public function diskPath(string $filePath): string
     {
-        return str_starts_with($filePath, 'attachments/')
+        $normalized = str_replace('\\', '/', str_starts_with($filePath, 'attachments/')
             ? Str::after($filePath, 'attachments/')
-            : $filePath;
+            : $filePath);
+
+        if (
+            $normalized === ''
+            || str_starts_with($normalized, '/')
+            || str_contains($normalized, '../')
+            || str_contains($normalized, '..\\')
+        ) {
+            throw new HttpResponseException(response()->json([
+                'message' => 'Attachment file not found.',
+            ], 404));
+        }
+
+        return ltrim($normalized, '/');
     }
 
     private function resolveAttachable(string $type, int $id): Model

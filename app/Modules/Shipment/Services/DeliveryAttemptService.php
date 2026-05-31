@@ -57,7 +57,7 @@ class DeliveryAttemptService
             };
 
             $notes = $data['notes'] ?? null;
-            $this->shipmentStatusUpdateService->update($shipment, $status, $notes, $userId);
+            $this->shipmentStatusUpdateService->update($shipment, $status, $notes, $userId, true);
 
             $this->auditLogService->log(
                 AuditEventType::DELIVERY_ATTEMPT_CREATED,

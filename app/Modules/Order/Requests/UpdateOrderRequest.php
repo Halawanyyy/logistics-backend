@@ -7,6 +7,7 @@ use App\Modules\Order\Enums\OrderFulfillmentType;
 use App\Modules\Order\Enums\OrderSource;
 use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Enums\OrderType;
+use App\Modules\Order\Models\Order;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,6 +16,15 @@ class UpdateOrderRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('fulfillment_type')) {
+            $this->merge([
+                'fulfillment_type' => OrderFulfillmentType::normalize($this->input('fulfillment_type')),
+            ]);
+        }
     }
 
     /**
@@ -66,7 +76,7 @@ class UpdateOrderRequest extends FormRequest
             ],
             'swap_notes' => ['sometimes', 'nullable', 'string'],
 
-            'fulfillment_type' => ['sometimes', Rule::in(OrderFulfillmentType::values())],
+            'fulfillment_type' => ['sometimes', Rule::in(OrderFulfillmentType::inputValues())],
             'is_fragile' => ['sometimes', 'boolean'],
             'allow_inspection' => ['sometimes', 'boolean'],
             'requires_packaging' => ['sometimes', 'boolean'],
@@ -99,7 +109,12 @@ class UpdateOrderRequest extends FormRequest
                 return;
             }
 
-            $order = $this->route('order');
+            $order = $this->resolveRouteOrder();
+
+            if (! $order instanceof Order) {
+                return;
+            }
+
             $finalDeliveryGovernorateId = $this->input('delivery_governorate_id', $order->delivery_governorate_id);
             $finalDeliveryAreaId = $this->has('delivery_area_id') ? $this->input('delivery_area_id') : $order->delivery_area_id;
 
@@ -154,6 +169,33 @@ class UpdateOrderRequest extends FormRequest
             if ($finalOriginalOrderId !== null && (int) $finalOriginalOrderId === (int) $order->id) {
                 $validator->errors()->add('original_order_id', 'The original order id field cannot reference the same order.');
             }
+
+            if (
+                $this->has('fulfillment_type')
+                && $finalFulfillmentType !== $order->fulfillment_type
+                && (
+                    $order->shipment()->exists()
+                    || $order->stockReservations()->exists()
+                    || ! in_array($order->warehouse_fulfillment_status, [null, 'not_required', 'pending_reservation'], true)
+                )
+            ) {
+                $validator->errors()->add('fulfillment_type', 'The fulfillment type cannot be changed after warehouse or shipment processing has started.');
+            }
         });
+    }
+
+    protected function resolveRouteOrder(): ?Order
+    {
+        $routeOrder = $this->route('order');
+
+        if ($routeOrder instanceof Order) {
+            return $routeOrder;
+        }
+
+        if (is_numeric($routeOrder)) {
+            return Order::query()->find((int) $routeOrder);
+        }
+
+        return null;
     }
 }

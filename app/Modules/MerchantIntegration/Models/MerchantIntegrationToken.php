@@ -24,6 +24,7 @@ class MerchantIntegrationToken extends Model
      * @var list<string>
      */
     public const SUPPORTED_PERMISSIONS = [
+        'integrations.me',
         'orders.create',
         'orders.view',
         'shipments.view',

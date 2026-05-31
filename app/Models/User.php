@@ -4,10 +4,13 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use App\Modules\MerchantPortal\Models\MerchantUser;
 use App\Modules\RolePermission\Models\Permission;
 use App\Modules\RolePermission\Models\Role;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -59,6 +62,18 @@ class User extends Authenticatable
     public function roleRelation(): BelongsTo
     {
         return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    public function merchantUsers(): HasMany
+    {
+        return $this->hasMany(MerchantUser::class);
+    }
+
+    public function activeMerchantUser(): HasOne
+    {
+        return $this->hasOne(MerchantUser::class)
+            ->whereNull('deleted_at')
+            ->where('status', 'active');
     }
 
     public function hasPermission(string $permission): bool

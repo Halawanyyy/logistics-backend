@@ -34,7 +34,11 @@ class ListInventoryStocksRequest extends FormRequest
                 'nullable',
                 Rule::exists('warehouse_bins', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
+            'sku' => ['nullable', 'string', 'max:255'],
+            'barcode' => ['nullable', 'string', 'max:255'],
             'low_stock' => ['nullable', 'boolean'],
+            'has_reserved' => ['nullable', 'boolean'],
+            'available_only' => ['nullable', 'boolean'],
         ];
     }
 }

@@ -18,7 +18,6 @@ class ExportLogResource extends JsonResource
             'format' => $this->format,
             'filters' => $this->filters,
             'status' => $this->status,
-            'file_path' => $this->file_path,
             'download_url' => route('exports.download', $this->resource),
             'generated_by_name' => $this->whenLoaded('generatedBy', fn () => $this->generatedBy?->name),
             'generated_at' => $this->generated_at,

@@ -11,6 +11,7 @@ use App\Modules\Order\Models\Order;
 use App\Modules\Order\Models\OrderItem;
 use App\Modules\Warehouse\Enums\OrderStockReservationStatus;
 use App\Modules\Warehouse\Enums\StockMovementType;
+use App\Modules\Warehouse\Enums\WarehouseFulfillmentStatus;
 use App\Modules\Warehouse\Models\InventoryStock;
 use App\Modules\Warehouse\Models\OrderStockReservation;
 use App\Modules\Warehouse\Models\StockMovement;
@@ -23,6 +24,8 @@ class WarehouseOrderReservationService
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
+        private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
+        private readonly WarehouseStockService $warehouseStockService,
     ) {
     }
 
@@ -49,7 +52,7 @@ class WarehouseOrderReservationService
                     $this->throwValidationError('Warehouse product does not belong to the same merchant as the order.');
                 }
 
-                $stock = $this->lockInventoryStock(
+                $stock = $this->warehouseStockService->lockStock(
                     (int) $data['warehouse_id'],
                     (int) $item['warehouse_product_id'],
                 );
@@ -57,15 +60,11 @@ class WarehouseOrderReservationService
                 if ($stock->quantity_available < (int) $item['quantity']) {
                     $this->throwValidationError('Not enough available stock.');
                 }
-
-                $beforeAvailable = $stock->quantity_available;
-                $beforeReserved = $stock->quantity_reserved;
-                $beforeDamaged = $stock->quantity_damaged;
-
-                $stock->update([
-                    'quantity_available' => $beforeAvailable - (int) $item['quantity'],
-                    'quantity_reserved' => $beforeReserved + (int) $item['quantity'],
-                ]);
+                $snapshot = $this->warehouseStockService->applyDelta(
+                    $stock,
+                    availableDelta: -((int) $item['quantity']),
+                    reservedDelta: (int) $item['quantity'],
+                );
 
                 $reservation = OrderStockReservation::create([
                     'order_id' => $lockedOrder->id,
@@ -78,20 +77,17 @@ class WarehouseOrderReservationService
                     'created_by' => $userId,
                 ]);
 
-                $this->createStockMovement(
+                $this->warehouseStockService->createMovement(
                     warehouseId: (int) $data['warehouse_id'],
                     warehouseProductId: (int) $item['warehouse_product_id'],
                     type: StockMovementType::RESERVED,
                     quantity: (int) $item['quantity'],
-                    beforeAvailable: $beforeAvailable,
-                    afterAvailable: $stock->quantity_available,
-                    beforeReserved: $beforeReserved,
-                    afterReserved: $stock->quantity_reserved,
-                    beforeDamaged: $beforeDamaged,
-                    afterDamaged: $stock->quantity_damaged,
+                    snapshot: $snapshot,
+                    referenceType: 'order_stock_reservation',
+                    referenceId: (int) $reservation->id,
                     notes: $reservation->notes,
-                    referenceId: $reservation->id,
                     userId: $userId,
+                    orderId: (int) $lockedOrder->id,
                 );
 
                 $this->auditLogService->log(
@@ -116,6 +112,8 @@ class WarehouseOrderReservationService
                 $this->syncOrderItemReservationStatus($reservation->orderItem()->first());
             }
 
+            $this->orderWarehouseStatusService->setStatus($lockedOrder, WarehouseFulfillmentStatus::RESERVED);
+
             return $reservations->load($this->reservationRelations());
         });
     }
@@ -134,10 +132,14 @@ class WarehouseOrderReservationService
                 ->lockForUpdate()
                 ->get();
 
+            if ($reservations->isEmpty()) {
+                $this->throwValidationError('No active stock reservation exists for this order.');
+            }
+
             $userId = auth()->id();
 
             foreach ($reservations as $reservation) {
-                $stock = $this->lockInventoryStock(
+                $stock = $this->warehouseStockService->lockStock(
                     (int) $reservation->warehouse_id,
                     (int) $reservation->warehouse_product_id,
                 );
@@ -146,34 +148,28 @@ class WarehouseOrderReservationService
                     $this->throwValidationError('Reserved stock is inconsistent.');
                 }
 
-                $beforeAvailable = $stock->quantity_available;
-                $beforeReserved = $stock->quantity_reserved;
-                $beforeDamaged = $stock->quantity_damaged;
-
-                $stock->update([
-                    'quantity_available' => $beforeAvailable + $reservation->quantity,
-                    'quantity_reserved' => $beforeReserved - $reservation->quantity,
-                ]);
+                $snapshot = $this->warehouseStockService->applyDelta(
+                    $stock,
+                    availableDelta: (int) $reservation->quantity,
+                    reservedDelta: -((int) $reservation->quantity),
+                );
 
                 $reservation->update([
                     'status' => OrderStockReservationStatus::RELEASED,
                     'released_at' => now(),
                 ]);
 
-                $this->createStockMovement(
+                $this->warehouseStockService->createMovement(
                     warehouseId: (int) $reservation->warehouse_id,
                     warehouseProductId: (int) $reservation->warehouse_product_id,
                     type: StockMovementType::RELEASED,
                     quantity: (int) $reservation->quantity,
-                    beforeAvailable: $beforeAvailable,
-                    afterAvailable: $stock->quantity_available,
-                    beforeReserved: $beforeReserved,
-                    afterReserved: $stock->quantity_reserved,
-                    beforeDamaged: $beforeDamaged,
-                    afterDamaged: $stock->quantity_damaged,
-                    notes: $reservation->notes,
+                    snapshot: $snapshot,
+                    referenceType: 'order_stock_reservation',
                     referenceId: (int) $reservation->id,
+                    notes: $reservation->notes,
                     userId: $userId,
+                    orderId: (int) $lockedOrder->id,
                 );
 
                 $this->auditLogService->log(
@@ -196,6 +192,8 @@ class WarehouseOrderReservationService
                 $this->syncOrderItemReservationStatus($reservation->orderItem()->first());
             }
 
+            $this->orderWarehouseStatusService->setStatus($lockedOrder, WarehouseFulfillmentStatus::PENDING_RESERVATION);
+
             return $reservations->load($this->reservationRelations());
         });
     }
@@ -209,15 +207,32 @@ class WarehouseOrderReservationService
 
             $this->ensureOrderCanUseWarehouseFlow($lockedOrder);
 
+            $this->orderWarehouseStatusService->ensureCurrentStatus(
+                $lockedOrder,
+                [
+                    WarehouseFulfillmentStatus::RESERVED,
+                    WarehouseFulfillmentStatus::PICKING,
+                    WarehouseFulfillmentStatus::PICKED,
+                    WarehouseFulfillmentStatus::PACKING,
+                    WarehouseFulfillmentStatus::PACKED,
+                    WarehouseFulfillmentStatus::READY_FOR_DISPATCH,
+                ],
+                'Order is not ready for warehouse fulfillment.',
+            );
+
             $reservations = $lockedOrder->stockReservations()
                 ->where('status', OrderStockReservationStatus::RESERVED)
                 ->lockForUpdate()
                 ->get();
 
+            if ($reservations->isEmpty()) {
+                $this->throwValidationError('No active stock reservation exists for this order.');
+            }
+
             $userId = auth()->id();
 
             foreach ($reservations as $reservation) {
-                $stock = $this->lockInventoryStock(
+                $stock = $this->warehouseStockService->lockStock(
                     (int) $reservation->warehouse_id,
                     (int) $reservation->warehouse_product_id,
                 );
@@ -226,37 +241,33 @@ class WarehouseOrderReservationService
                     $this->throwValidationError('Reserved stock is inconsistent.');
                 }
 
-                $beforeAvailable = $stock->quantity_available;
-                $beforeReserved = $stock->quantity_reserved;
-                $beforeDamaged = $stock->quantity_damaged;
-
-                $stock->update([
-                    'quantity_reserved' => $beforeReserved - $reservation->quantity,
-                ]);
+                $snapshot = $this->warehouseStockService->applyDelta(
+                    $stock,
+                    reservedDelta: -((int) $reservation->quantity),
+                );
 
                 $reservation->update([
                     'status' => OrderStockReservationStatus::FULFILLED,
                     'fulfilled_at' => now(),
                 ]);
 
-                $this->createStockMovement(
+                $this->warehouseStockService->createMovement(
                     warehouseId: (int) $reservation->warehouse_id,
                     warehouseProductId: (int) $reservation->warehouse_product_id,
                     type: StockMovementType::OUT,
                     quantity: (int) $reservation->quantity,
-                    beforeAvailable: $beforeAvailable,
-                    afterAvailable: $stock->quantity_available,
-                    beforeReserved: $beforeReserved,
-                    afterReserved: $stock->quantity_reserved,
-                    beforeDamaged: $beforeDamaged,
-                    afterDamaged: $stock->quantity_damaged,
-                    notes: $reservation->notes,
+                    snapshot: $snapshot,
+                    referenceType: 'order_stock_reservation',
                     referenceId: (int) $reservation->id,
+                    notes: $reservation->notes,
                     userId: $userId,
+                    orderId: (int) $lockedOrder->id,
                 );
 
                 $this->syncOrderItemReservationStatus($reservation->orderItem()->first());
             }
+
+            $this->orderWarehouseStatusService->setStatus($lockedOrder, WarehouseFulfillmentStatus::FULFILLED);
 
             return $reservations->load($this->reservationRelations());
         });
@@ -271,56 +282,10 @@ class WarehouseOrderReservationService
         if ($order->status === OrderStatus::CANCELLED) {
             $this->throwValidationError('Cancelled orders cannot manage warehouse stock.');
         }
-    }
 
-    private function lockInventoryStock(int $warehouseId, int $warehouseProductId): InventoryStock
-    {
-        return InventoryStock::query()
-            ->lockForUpdate()
-            ->firstOrCreate(
-                [
-                    'warehouse_id' => $warehouseId,
-                    'warehouse_product_id' => $warehouseProductId,
-                ],
-                [
-                    'quantity_available' => 0,
-                    'quantity_reserved' => 0,
-                    'quantity_damaged' => 0,
-                ]
-            );
-    }
-
-    private function createStockMovement(
-        int $warehouseId,
-        int $warehouseProductId,
-        string $type,
-        int $quantity,
-        int $beforeAvailable,
-        int $afterAvailable,
-        int $beforeReserved,
-        int $afterReserved,
-        int $beforeDamaged,
-        int $afterDamaged,
-        ?string $notes,
-        int $referenceId,
-        ?int $userId,
-    ): void {
-        StockMovement::create([
-            'warehouse_id' => $warehouseId,
-            'warehouse_product_id' => $warehouseProductId,
-            'type' => $type,
-            'quantity' => $quantity,
-            'before_available' => $beforeAvailable,
-            'after_available' => $afterAvailable,
-            'before_reserved' => $beforeReserved,
-            'after_reserved' => $afterReserved,
-            'before_damaged' => $beforeDamaged,
-            'after_damaged' => $afterDamaged,
-            'reference_type' => 'order_stock_reservation',
-            'reference_id' => $referenceId,
-            'notes' => $notes,
-            'created_by' => $userId,
-        ]);
+        if ($order->warehouse_fulfillment_status === WarehouseFulfillmentStatus::FULFILLED) {
+            $this->throwValidationError('Fulfilled warehouse orders cannot manage warehouse stock again.');
+        }
     }
 
     private function syncOrderItemReservationStatus(?OrderItem $orderItem): void

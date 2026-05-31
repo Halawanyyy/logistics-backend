@@ -28,6 +28,7 @@ class StoreWarehouseProductRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'sku' => ['nullable', 'string', 'max:255'],
             'barcode' => ['nullable', 'string', 'max:255'],
+            'barcode_type' => ['nullable', 'string', 'max:50'],
             'description' => ['nullable', 'string'],
             'unit_weight' => ['nullable', 'numeric', 'min:0'],
             'unit_length' => ['nullable', 'numeric', 'min:0'],
@@ -36,6 +37,8 @@ class StoreWarehouseProductRequest extends FormRequest
             'is_fragile' => ['nullable', 'boolean'],
             'requires_packaging' => ['nullable', 'boolean'],
             'status' => ['nullable', Rule::in(WarehouseProductStatus::values())],
+            'minimum_stock_quantity' => ['nullable', 'integer', 'min:0'],
+            'low_stock_alert_enabled' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
         ];
     }

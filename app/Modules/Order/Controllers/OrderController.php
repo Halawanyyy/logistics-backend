@@ -17,10 +17,11 @@ use App\Modules\Order\Requests\ListOrdersRequest;
 use App\Modules\Order\Requests\StoreOrderRequest;
 use App\Modules\Order\Requests\UpdateOrderRequest;
 use App\Modules\Order\Resources\OrderResource;
+use App\Modules\Order\Services\OrderLifecycleService;
 use App\Modules\Order\Services\OrderShippingFeeService;
 use App\Modules\Settings\Services\SystemSettingService;
+use App\Modules\Warehouse\Services\OrderWarehouseStatusService;
 use App\Services\BarcodeService;
-use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -34,9 +35,11 @@ class OrderController
         private readonly ConfirmOrderAction $confirmOrderAction,
         private readonly CreateOrderAction $createOrderAction,
         private readonly GenerateOrderNumberAction $generateOrderNumberAction,
+        private readonly OrderLifecycleService $orderLifecycleService,
         private readonly OrderShippingFeeService $orderShippingFeeService,
         private readonly SystemSettingService $systemSettingService,
         private readonly BarcodeService $barcodeService,
+        private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
     ) {
     }
 
@@ -52,12 +55,19 @@ class OrderController
             ->when(isset($validated['merchant_name']), fn ($query) => $query->whereHas('merchant', function ($merchantQuery) use ($validated) {
                 $merchantQuery->where('name', 'like', '%'.$validated['merchant_name'].'%');
             }))
+            ->when(isset($validated['delivery_governorate_id']), fn ($query) => $query->where('delivery_governorate_id', $validated['delivery_governorate_id']))
+            ->when(isset($validated['delivery_area_id']), fn ($query) => $query->where('delivery_area_id', $validated['delivery_area_id']))
             ->when(isset($validated['status']), fn ($query) => $query->where('status', $validated['status']))
             ->when(($validated['partially_delivered'] ?? false) === true, fn ($query) => $query->where('status', OrderStatus::PARTIALLY_DELIVERED))
             ->when(isset($validated['delivery_status']), fn ($query) => $query->whereHas('items', fn ($itemQuery) => $itemQuery->where('delivery_status', $validated['delivery_status'])))
             ->when(isset($validated['order_type']), fn ($query) => $query->where('order_type', $validated['order_type']))
             ->when(isset($validated['fulfillment_type']), fn ($query) => $query->where('fulfillment_type', $validated['fulfillment_type']))
             ->when(isset($validated['payment_type']), fn ($query) => $query->where('payment_type', $validated['payment_type']))
+            ->when(isset($validated['warehouse_fulfillment_status']), fn ($query) => $query->where('warehouse_fulfillment_status', $validated['warehouse_fulfillment_status']))
+            ->when(isset($validated['customer_phone']), fn ($query) => $query->where('customer_phone', 'like', '%'.$validated['customer_phone'].'%'))
+            ->when(isset($validated['order_number']), fn ($query) => $query->where('order_number', 'like', '%'.$validated['order_number'].'%'))
+            ->when(($validated['has_shipment'] ?? null) === true, fn ($query) => $query->has('shipment'))
+            ->when(($validated['has_shipment'] ?? null) === false, fn ($query) => $query->doesntHave('shipment'))
             ->when(isset($validated['search']), function ($query) use ($validated) {
                 $search = $validated['search'];
 
@@ -65,7 +75,8 @@ class OrderController
                     $searchQuery
                         ->where('order_number', 'like', '%'.$search.'%')
                         ->orWhere('customer_name', 'like', '%'.$search.'%')
-                        ->orWhere('customer_phone', 'like', '%'.$search.'%');
+                        ->orWhere('customer_phone', 'like', '%'.$search.'%')
+                        ->orWhere('barcode', 'like', '%'.$search.'%');
                 });
             })
             ->latest()
@@ -93,11 +104,7 @@ class OrderController
 
     public function update(UpdateOrderRequest $request, Order $order): OrderResource
     {
-        $this->ensureOrderCanBeModified(
-            $order,
-            'allow_order_edit_after_shipment',
-            'Order cannot be edited after shipment has been created.'
-        );
+        $this->orderLifecycleService->ensureCanModify($order);
         $oldStatus = $order->status;
 
         $order = DB::transaction(function () use ($request, $order) {
@@ -139,11 +146,7 @@ class OrderController
 
     public function destroy(Order $order): JsonResponse
     {
-        $this->ensureOrderCanBeModified(
-            $order,
-            'allow_order_delete_after_shipment',
-            'Order cannot be deleted after shipment has been created.'
-        );
+        $this->orderLifecycleService->ensureCanDelete($order);
 
         $order->delete();
 
@@ -208,6 +211,12 @@ class OrderController
                 : OrderFulfillmentType::PICKUP_FROM_MERCHANT;
         }
 
+        if (Arr::exists($attributes, 'fulfillment_type')) {
+            $attributes['warehouse_fulfillment_status'] = $this->orderWarehouseStatusService->defaultStatusForFulfillment(
+                (string) $attributes['fulfillment_type']
+            );
+        }
+
         if ($applyDefaults && ! Arr::exists($attributes, 'source')) {
             $attributes['source'] = OrderSource::MANUAL;
         }
@@ -256,16 +265,5 @@ class OrderController
             'latestStockReservation',
             'items',
         ];
-    }
-
-    private function ensureOrderCanBeModified(Order $order, string $settingKey, string $message): void
-    {
-        $allowAfterShipment = (bool) $this->systemSettingService->get($settingKey, false);
-
-        if (! $allowAfterShipment && $order->shipment()->exists()) {
-            throw new HttpResponseException(response()->json([
-                'message' => $message,
-            ], 422));
-        }
     }
 }

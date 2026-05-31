@@ -16,7 +16,7 @@ class TrackingController
 
         if ($shipment === null) {
             abort(response()->json([
-                'message' => 'Shipment not found.',
+                'message' => __('shipments.not_found'),
             ], 404));
         }
 

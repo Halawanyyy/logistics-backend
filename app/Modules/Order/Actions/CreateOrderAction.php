@@ -10,6 +10,7 @@ use App\Modules\Order\Enums\PaymentType;
 use App\Modules\Order\Models\Order;
 use App\Modules\Order\Services\OrderShippingFeeService;
 use App\Modules\Settings\Services\SystemSettingService;
+use App\Modules\Warehouse\Services\OrderWarehouseStatusService;
 use App\Services\BarcodeService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Arr;
@@ -22,6 +23,7 @@ class CreateOrderAction
         private readonly GenerateOrderNumberAction $generateOrderNumberAction,
         private readonly OrderShippingFeeService $orderShippingFeeService,
         private readonly SystemSettingService $systemSettingService,
+        private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
     ) {
     }
 
@@ -102,6 +104,10 @@ class CreateOrderAction
                 ? OrderFulfillmentType::PICKUP_FROM_CUSTOMER
                 : OrderFulfillmentType::PICKUP_FROM_MERCHANT;
         }
+
+        $attributes['warehouse_fulfillment_status'] = $this->orderWarehouseStatusService->defaultStatusForFulfillment(
+            (string) ($attributes['fulfillment_type'] ?? OrderFulfillmentType::PICKUP_FROM_MERCHANT)
+        );
 
         if ($applyDefaults && ! Arr::exists($attributes, 'source')) {
             $attributes['source'] = OrderSource::MANUAL;

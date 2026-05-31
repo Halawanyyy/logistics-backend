@@ -37,7 +37,7 @@ class AssignDriverRequest extends FormRequest
             $driver = Driver::query()->find($this->integer('driver_id'));
 
             if ($driver !== null && $driver->status !== DriverStatus::ACTIVE) {
-                $validator->errors()->add('driver_id', 'Selected driver is inactive.');
+                $validator->errors()->add('driver_id', __('validation.custom.driver_id.inactive'));
             }
         });
     }

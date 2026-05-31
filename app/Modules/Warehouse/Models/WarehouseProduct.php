@@ -21,6 +21,8 @@ class WarehouseProduct extends Model
         'name',
         'sku',
         'barcode',
+        'barcode_type',
+        'barcode_generated_at',
         'description',
         'unit_weight',
         'unit_length',
@@ -29,6 +31,8 @@ class WarehouseProduct extends Model
         'is_fragile',
         'requires_packaging',
         'status',
+        'minimum_stock_quantity',
+        'low_stock_alert_enabled',
         'notes',
     ];
 
@@ -44,6 +48,9 @@ class WarehouseProduct extends Model
             'unit_height' => 'decimal:2',
             'is_fragile' => 'boolean',
             'requires_packaging' => 'boolean',
+            'barcode_generated_at' => 'datetime',
+            'minimum_stock_quantity' => 'integer',
+            'low_stock_alert_enabled' => 'boolean',
             'deleted_at' => 'datetime',
         ];
     }
@@ -71,6 +78,11 @@ class WarehouseProduct extends Model
     public function warehouseReturns(): HasMany
     {
         return $this->hasMany(WarehouseReturn::class);
+    }
+
+    public function receiptItems(): HasMany
+    {
+        return $this->hasMany(WarehouseReceiptItem::class);
     }
 
     public function warehouseCharges(): HasMany

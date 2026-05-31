@@ -9,6 +9,7 @@ use App\Modules\Order\Models\Order;
 use App\Modules\Warehouse\Enums\OrderStockReservationStatus;
 use App\Modules\Warehouse\Enums\PickingListItemStatus;
 use App\Modules\Warehouse\Enums\PickingListStatus;
+use App\Modules\Warehouse\Enums\WarehouseFulfillmentStatus;
 use App\Modules\Warehouse\Models\InventoryStock;
 use App\Modules\Warehouse\Models\PickingList;
 use App\Modules\Warehouse\Models\PickingListItem;
@@ -21,6 +22,7 @@ class PickingListService
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
+        private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
     ) {
     }
 
@@ -134,6 +136,11 @@ class PickingListService
             ]);
 
             if ($allPicked) {
+                $orderIds = $pickingList->items()->pluck('order_id')->unique();
+                Order::query()
+                    ->whereIn('id', $orderIds)
+                    ->update(['warehouse_fulfillment_status' => WarehouseFulfillmentStatus::PICKED]);
+
                 $this->auditLogService->log(
                     AuditEventType::PICKING_COMPLETED,
                     'completed',

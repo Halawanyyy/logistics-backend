@@ -3,7 +3,12 @@
 namespace App\Models;
 
 use App\Traits\Auditable;
+use App\Modules\Attachment\Models\Attachment;
 use App\Modules\MerchantIntegration\Models\MerchantIntegrationToken;
+use App\Modules\MerchantPortal\Models\MerchantNotification;
+use App\Modules\MerchantPortal\Models\MerchantPortalSetting;
+use App\Modules\MerchantPortal\Models\MerchantUser;
+use App\Modules\Export\Models\ExportLog;
 use App\Modules\LocationPricing\Models\PricingPlan;
 use App\Modules\Finance\Models\MerchantWalletTransaction;
 use App\Modules\Warehouse\Models\WarehouseCharge;
@@ -57,5 +62,37 @@ class Merchant extends Model
     public function integrationTokens(): HasMany
     {
         return $this->hasMany(MerchantIntegrationToken::class);
+    }
+
+    public function merchantUsers(): HasMany
+    {
+        return $this->hasMany(MerchantUser::class);
+    }
+
+    public function activeMerchantUsers(): HasMany
+    {
+        return $this->hasMany(MerchantUser::class)
+            ->whereNull('deleted_at')
+            ->where('status', 'active');
+    }
+
+    public function portalSetting()
+    {
+        return $this->hasOne(MerchantPortalSetting::class);
+    }
+
+    public function portalNotifications(): HasMany
+    {
+        return $this->hasMany(MerchantNotification::class);
+    }
+
+    public function portalExports(): HasMany
+    {
+        return $this->hasMany(ExportLog::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class);
     }
 }

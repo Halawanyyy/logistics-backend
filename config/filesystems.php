@@ -32,7 +32,7 @@ return [
 
         'local' => [
             'driver' => 'local',
-            'root' => storage_path('app/private'),
+            'root' => env('FILESYSTEM_PRIVATE_ROOT', storage_path('app/private')),
             'serve' => true,
             'throw' => false,
             'report' => false,
@@ -49,14 +49,14 @@ return [
 
         'exports' => [
             'driver' => 'local',
-            'root' => storage_path('app/exports'),
+            'root' => env('FILESYSTEM_EXPORTS_ROOT', storage_path('app/exports')),
             'throw' => false,
             'report' => false,
         ],
 
         'attachments' => [
             'driver' => 'local',
-            'root' => storage_path('app/attachments'),
+            'root' => env('FILESYSTEM_ATTACHMENTS_ROOT', storage_path('app/attachments')),
             'throw' => false,
             'report' => false,
         ],
