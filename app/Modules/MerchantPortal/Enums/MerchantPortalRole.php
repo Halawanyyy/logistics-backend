@@ -9,6 +9,7 @@ final class MerchantPortalRole
     public const STAFF = 'staff';
     public const ACCOUNTANT = 'accountant';
     public const WAREHOUSE_VIEWER = 'warehouse_viewer';
+    public const VIEWER = 'viewer';
 
     /**
      * @return list<string>
@@ -21,6 +22,7 @@ final class MerchantPortalRole
             self::STAFF,
             self::ACCOUNTANT,
             self::WAREHOUSE_VIEWER,
+            self::VIEWER,
         ];
     }
 }

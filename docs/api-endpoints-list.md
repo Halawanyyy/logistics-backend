@@ -71,6 +71,20 @@ GET /api/merchants/{merchant}
 PUT /api/merchants/{merchant}
 DELETE /api/merchants/{merchant}
 GET /api/merchants/{merchant}/dashboard/summary
+GET /api/merchants/{merchant}/shop-preview
+
+### Company Catalog
+
+GET /api/company-catalog-items
+POST /api/company-catalog-items
+GET /api/company-catalog-items/{companyCatalogItem}
+PUT /api/company-catalog-items/{companyCatalogItem}
+DELETE /api/company-catalog-items/{companyCatalogItem}
+
+### Merchant Shop
+
+GET /api/merchant-shop/catalog
+GET /api/merchant-shop/pricing
 
 ### Merchant Finance And Wallet
 

@@ -4,8 +4,9 @@ namespace App\Modules\MerchantPortal\Resources;
 
 use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Resources\OrderItemResource;
-use App\Services\LocalizedLabelService;
+use App\Modules\Order\Resources\OrderPackagingItemResource;
 use App\Modules\Warehouse\Enums\WarehouseFulfillmentStatus;
+use App\Services\LocalizedLabelService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -65,6 +66,10 @@ class MerchantPortalOrderDetailResource extends JsonResource
             'order_type_label' => $labels->label('orders.type', $this->order_type),
             'fulfillment_type' => $this->fulfillment_type,
             'fulfillment_type_label' => $labels->label('orders.fulfillment_type', $this->fulfillment_type),
+            'warehouse_fulfillment_status' => $this->warehouse_fulfillment_status,
+            'warehouse_fulfillment_status_label' => $labels->label('orders.warehouse_fulfillment_status', $this->warehouse_fulfillment_status),
+            'is_fragile' => (bool) $this->is_fragile,
+            'allow_inspection' => (bool) $this->allow_inspection,
             'payment_type' => $this->payment_type,
             'payment_type_label' => $labels->label('orders.payment_type', $this->payment_type),
             'customer' => [
@@ -91,8 +96,11 @@ class MerchantPortalOrderDetailResource extends JsonResource
                 'payment_type_label' => $labels->label('orders.payment_type', $this->payment_type),
                 'cod_amount' => $this->cod_amount,
                 'shipping_fee' => $this->shipping_fee,
+                'total_packaging_fee' => $this->total_packaging_fee,
                 'total_amount' => number_format((float) $this->cod_amount + (float) $this->shipping_fee, 2, '.', ''),
             ],
+            'requires_packaging' => (bool) $this->requires_packaging,
+            'package_notes' => $this->package_notes,
             'warehouse_summary' => [
                 'fulfillment_type' => $this->fulfillment_type,
                 'fulfillment_type_label' => $labels->label('orders.fulfillment_type', $this->fulfillment_type),
@@ -112,6 +120,7 @@ class MerchantPortalOrderDetailResource extends JsonResource
                 'status_label' => $labels->label('shipments.status', $shipment->status),
             ] : null,
             'items' => $this->whenLoaded('items', fn () => OrderItemResource::collection($this->items)),
+            'packaging_items' => $this->whenLoaded('packagingItems', fn () => OrderPackagingItemResource::collection($this->packagingItems)),
             'allowed_actions' => [
                 'can_confirm' => in_array((string) $this->status, [OrderStatus::DRAFT, OrderStatus::PENDING_REVIEW], true) && ! (bool) $this->requires_review,
                 'can_update' => $canModify,

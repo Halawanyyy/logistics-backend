@@ -8,6 +8,7 @@ use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Enums\OrderType;
 use App\Modules\Order\Enums\PaymentType;
 use App\Modules\Order\Models\Order;
+use App\Modules\Order\Services\OrderPackagingService;
 use App\Modules\Order\Services\OrderShippingFeeService;
 use App\Modules\Settings\Services\SystemSettingService;
 use App\Modules\Warehouse\Services\OrderWarehouseStatusService;
@@ -21,11 +22,11 @@ class CreateOrderAction
     public function __construct(
         private readonly BarcodeService $barcodeService,
         private readonly GenerateOrderNumberAction $generateOrderNumberAction,
+        private readonly OrderPackagingService $orderPackagingService,
         private readonly OrderShippingFeeService $orderShippingFeeService,
         private readonly SystemSettingService $systemSettingService,
         private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $validated
@@ -44,6 +45,7 @@ class CreateOrderAction
 
             $order = Order::create($orderData);
             $order->items()->createMany($this->buildItemsPayload($validated['items']));
+            $this->orderPackagingService->syncFromPayload($order, $validated, $userId);
 
             return $order->load($this->relations());
         });
@@ -79,6 +81,7 @@ class CreateOrderAction
             'allow_inspection',
             'requires_packaging',
             'package_notes',
+            'total_packaging_fee',
             'source',
             'external_source',
             'external_order_id',
@@ -209,6 +212,7 @@ class CreateOrderAction
             'shipment',
             'latestStockReservation',
             'items',
+            'packagingItems',
         ];
     }
 }

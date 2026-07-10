@@ -107,6 +107,68 @@ class MerchantPortalPhaseTwoTest extends TestCase
         ]);
     }
 
+    public function test_merchant_user_can_list_active_governorates_and_areas_without_internal_permissions(): void
+    {
+        $merchant = $this->makeMerchant();
+        $activeGovernorate = \App\Modules\LocationPricing\Models\Governorate::create([
+            'name' => 'Cairo',
+            'is_active' => true,
+        ]);
+        \App\Modules\LocationPricing\Models\Governorate::create([
+            'name' => 'Archived',
+            'is_active' => false,
+        ]);
+        $activeArea = \App\Modules\LocationPricing\Models\Area::create([
+            'governorate_id' => $activeGovernorate->id,
+            'name' => 'Nasr City',
+            'is_active' => true,
+        ]);
+        \App\Modules\LocationPricing\Models\Area::create([
+            'governorate_id' => $activeGovernorate->id,
+            'name' => 'Hidden Area',
+            'is_active' => false,
+        ]);
+
+        $otherGovernorate = \App\Modules\LocationPricing\Models\Governorate::create([
+            'name' => 'Giza',
+            'is_active' => true,
+        ]);
+        \App\Modules\LocationPricing\Models\Area::create([
+            'governorate_id' => $otherGovernorate->id,
+            'name' => 'Dokki',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create(['role' => 'merchant_portal']);
+        $this->makeMerchantPortalUser($merchant, $user, [
+            'role' => MerchantPortalRole::STAFF,
+            'is_primary' => false,
+        ]);
+
+        Sanctum::actingAs($user->fresh());
+
+        $this->getJson('/api/merchant-portal/locations/governorates')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.id', $activeGovernorate->id)
+            ->assertJsonPath('data.0.name', 'Cairo');
+
+        $this->getJson('/api/merchant-portal/locations/areas?governorate_id='.$activeGovernorate->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $activeArea->id)
+            ->assertJsonPath('data.0.name', 'Nasr City');
+    }
+
+    public function test_merchant_portal_location_endpoints_require_authentication(): void
+    {
+        $this->getJson('/api/merchant-portal/locations/governorates')
+            ->assertStatus(401);
+
+        $this->getJson('/api/merchant-portal/locations/areas?governorate_id=1')
+            ->assertStatus(401);
+    }
+
     public function test_create_payload_rejects_merchant_id_and_source(): void
     {
         $merchant = $this->makeMerchant();

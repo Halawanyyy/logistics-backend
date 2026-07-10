@@ -18,6 +18,7 @@ use App\Modules\Order\Requests\StoreOrderRequest;
 use App\Modules\Order\Requests\UpdateOrderRequest;
 use App\Modules\Order\Resources\OrderResource;
 use App\Modules\Order\Services\OrderLifecycleService;
+use App\Modules\Order\Services\OrderPackagingService;
 use App\Modules\Order\Services\OrderShippingFeeService;
 use App\Modules\Settings\Services\SystemSettingService;
 use App\Modules\Warehouse\Services\OrderWarehouseStatusService;
@@ -36,12 +37,12 @@ class OrderController
         private readonly CreateOrderAction $createOrderAction,
         private readonly GenerateOrderNumberAction $generateOrderNumberAction,
         private readonly OrderLifecycleService $orderLifecycleService,
+        private readonly OrderPackagingService $orderPackagingService,
         private readonly OrderShippingFeeService $orderShippingFeeService,
         private readonly SystemSettingService $systemSettingService,
         private readonly BarcodeService $barcodeService,
         private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
-    ) {
-    }
+    ) {}
 
     public function index(ListOrdersRequest $request): AnonymousResourceCollection
     {
@@ -118,6 +119,8 @@ class OrderController
                 $order->items()->createMany($this->buildItemsPayload($validated['items']));
             }
 
+            $this->orderPackagingService->syncFromPayload($order, $validated, $request->user()?->id);
+
             return $order->fresh()->load($this->relations());
         });
 
@@ -156,7 +159,7 @@ class OrderController
     }
 
     /**
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
     private function buildOrderAttributes(Request $request, array $validated, bool $applyDefaults = false): array
@@ -185,6 +188,7 @@ class OrderController
             'allow_inspection',
             'requires_packaging',
             'package_notes',
+            'total_packaging_fee',
             'source',
             'external_source',
             'external_order_id',
@@ -264,6 +268,25 @@ class OrderController
             'shipment',
             'latestStockReservation',
             'items',
+            'packagingItems',
         ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildItemsPayload(array $items): array
+    {
+        return array_map(static function (array $item): array {
+            return [
+                'product_name' => $item['product_name'],
+                'sku' => $item['sku'] ?? null,
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'] ?? '0.00',
+                'weight' => $item['weight'] ?? null,
+                'notes' => $item['notes'] ?? null,
+            ];
+        }, $items);
     }
 }

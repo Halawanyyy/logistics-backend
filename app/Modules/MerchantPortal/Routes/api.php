@@ -9,6 +9,7 @@ use App\Modules\MerchantPortal\Controllers\MerchantPortalInboundStockRequestCont
 use App\Modules\MerchantPortal\Controllers\MerchantPortalInventoryController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalIntegrationTokenController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalInvoiceController;
+use App\Modules\MerchantPortal\Controllers\MerchantPortalLocationController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalMeController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalNotificationController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalOrderController;
@@ -30,6 +31,11 @@ Route::middleware(['auth:sanctum', 'merchant.portal'])->prefix('merchant-portal'
     Route::get('/settings', [MerchantPortalSettingsController::class, 'show']);
     Route::put('/settings', [MerchantPortalSettingsController::class, 'update']);
     Route::get('/dashboard/summary', [MerchantPortalDashboardController::class, 'summary']);
+
+    Route::prefix('locations')->group(function () {
+        Route::get('/governorates', [MerchantPortalLocationController::class, 'governorates']);
+        Route::get('/areas', [MerchantPortalLocationController::class, 'areas']);
+    });
 
     Route::prefix('orders')->group(function () {
         Route::get('/', [MerchantPortalOrderController::class, 'index']);

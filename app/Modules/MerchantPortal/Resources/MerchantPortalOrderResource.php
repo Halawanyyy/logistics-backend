@@ -38,6 +38,8 @@ class MerchantPortalOrderResource extends JsonResource
             ],
             'cod_amount' => $this->cod_amount,
             'shipping_fee' => $this->shipping_fee,
+            'requires_packaging' => (bool) $this->requires_packaging,
+            'total_packaging_fee' => $this->total_packaging_fee,
             'total_amount' => number_format((float) $this->cod_amount + (float) $this->shipping_fee, 2, '.', ''),
             'has_shipment' => $shipment !== null,
             'shipment_summary' => $shipment !== null ? [

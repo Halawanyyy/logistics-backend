@@ -8,20 +8,27 @@ use App\Modules\LocationPricing\Models\Area;
 use App\Modules\LocationPricing\Models\Governorate;
 use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\OrderStockReservation;
+use App\Traits\Auditable;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
+    use Auditable, SoftDeletes;
+
     /** @use HasFactory<OrderFactory> */
     use HasFactory;
 
-    use SoftDeletes;
+    /**
+     * @var list<string>
+     */
+    protected array $auditExcluded = ['barcode'];
 
     /**
      * @var list<string>
@@ -52,6 +59,7 @@ class Order extends Model
         'allow_inspection',
         'requires_packaging',
         'package_notes',
+        'total_packaging_fee',
         'source',
         'external_source',
         'external_order_id',
@@ -72,6 +80,7 @@ class Order extends Model
         return [
             'cod_amount' => 'decimal:2',
             'shipping_fee' => 'decimal:2',
+            'total_packaging_fee' => 'decimal:2',
             'is_fragile' => 'boolean',
             'allow_inspection' => 'boolean',
             'requires_packaging' => 'boolean',
@@ -113,6 +122,11 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function packagingItems(): HasMany
+    {
+        return $this->hasMany(OrderPackagingItem::class);
     }
 
     public function shipment(): HasOne

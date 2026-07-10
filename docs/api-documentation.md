@@ -6420,6 +6420,8 @@ Notes:
 - returns only the current merchant
 - does not return switch options
 - updates `last_login_at`
+- capabilities are mapped dynamically from `App\Modules\MerchantPortal\Services\MerchantPortalCapabilityService`. See [MERCHANT_PORTAL_CAPABILITY_MATRIX.md](file:///E:/logistics/logistics-frontend/docs/MERCHANT_PORTAL_CAPABILITY_MATRIX.md) for details.
+- capabilities can be synced using `php artisan merchant-portal:sync-capabilities` command.
 
 ### GET `/api/merchant-portal/profile`
 
@@ -7142,3 +7144,198 @@ Linking an inbound request to a confirmed warehouse receipt can move the inbound
 - `partially_received`
 
 Linking a request to a receipt still does not replace warehouse receipt confirmation as the stock-in authority.
+
+## Company Catalog / Packaging / Merchant Shop
+
+### Company Catalog Concept
+
+- `company_catalog_items` stores company-owned packaging products and service catalog items.
+- This catalog is separate from merchant warehouse inventory and does not replace `warehouse_products`.
+- Supported types:
+  - `packaging_product`
+  - `storage_service`
+  - `fulfillment_service`
+  - `other_service`
+
+### Company Catalog Admin APIs
+
+- `GET /api/company-catalog-items`
+  - Permission: `company_catalog.view`
+  - Filters: `type`, `category`, `status`, `is_visible_to_merchants`, `search`
+- `POST /api/company-catalog-items`
+  - Permission: `company_catalog.create`
+- `GET /api/company-catalog-items/{companyCatalogItem}`
+  - Permission: `company_catalog.view`
+- `PUT /api/company-catalog-items/{companyCatalogItem}`
+  - Permission: `company_catalog.update`
+- `DELETE /api/company-catalog-items/{companyCatalogItem}`
+  - Permission: `company_catalog.delete`
+
+Create example:
+
+```json
+{
+  "type": "packaging_product",
+  "category": "flyer",
+  "name": "Flyer Medium",
+  "sku": "FLYER-M",
+  "description": "Medium flyer bag for small orders.",
+  "unit_price": 3.5,
+  "currency": "EGP",
+  "size_label": "Medium",
+  "length": 30,
+  "width": 20,
+  "unit": "cm",
+  "is_visible_to_merchants": true,
+  "sort_order": 10,
+  "status": "active"
+}
+```
+
+### Order Packaging Fields
+
+- Order create and update now accept:
+  - `requires_packaging`
+  - `package_notes`
+  - `packaging_items`
+- `packaging_items` payload example:
+
+```json
+{
+  "requires_packaging": true,
+  "package_notes": "Use flyer and fragile sticker",
+  "packaging_items": [
+    {
+      "company_catalog_item_id": 1,
+      "quantity": 2,
+      "notes": "Use for fragile item"
+    }
+  ]
+}
+```
+
+Rules:
+
+- only active `packaging_product` catalog items are valid for order selection
+- selections are stored in `order_packaging_items` snapshot rows
+- updating catalog price later does not change existing order packaging snapshots
+- additive order response fields:
+  - `total_packaging_fee`
+  - `packaging_items`
+
+Packaging item response shape:
+
+```json
+{
+  "id": 1,
+  "company_catalog_item_id": 1,
+  "item_name": "Flyer Medium",
+  "item_sku": "FLYER-M",
+  "category": "flyer",
+  "size_label": "Medium",
+  "unit_price": "3.50",
+  "quantity": 2,
+  "total_price": "7.00",
+  "notes": "Use for fragile item"
+}
+```
+
+### Merchant Shop Read-Only APIs
+
+- `GET /api/merchant-shop/catalog`
+  - Permission: `merchant_shop.view`
+  - Filters: `type`, `category`, `search`
+- `GET /api/merchant-shop/pricing`
+  - Permission: `merchant_shop.view`
+  - Optional filter: `merchant_id`
+- `GET /api/merchants/{merchant}/shop-preview`
+  - Permission: `merchant_shop.view`
+
+Rules:
+
+- read-only only
+- no cart
+- no checkout
+- no purchase flow
+- only `active` and merchant-visible catalog items are returned
+
+Merchant pricing preview response example:
+
+```json
+{
+  "data": {
+    "packaging_products": [
+      {
+        "id": 1,
+        "type": "packaging_product",
+        "name": "Flyer Medium",
+        "sku": "FLYER-M",
+        "unit_price": "3.50",
+        "currency": "EGP",
+        "status": "active"
+      }
+    ],
+    "storage_fees": [
+      {
+        "id": 1,
+        "name": "Merchant Storage Rule",
+        "calculation_type": "per_item_per_month",
+        "free_units": 10,
+        "unit_price": "2.50",
+        "status": "active"
+      }
+    ],
+    "pick_pack_fees": [
+      {
+        "id": 1,
+        "name": "Merchant Pick Pack Rule",
+        "pick_fee_first_item": "6.00",
+        "pick_fee_additional_item": "2.00",
+        "packing_fee_base": "4.00",
+        "fragile_extra_fee": "3.00",
+        "status": "active"
+      }
+    ],
+    "services": [
+      {
+        "id": 3,
+        "type": "other_service",
+        "name": "Gift Wrapping Service",
+        "unit_price": "0.00",
+        "currency": "EGP",
+        "status": "active"
+      }
+    ]
+  }
+}
+```
+
+### Permissions Added
+
+- `company_catalog.view`
+- `company_catalog.create`
+- `company_catalog.update`
+- `company_catalog.delete`
+- `order_packaging.view`
+- `order_packaging.manage`
+- `merchant_shop.view`
+
+### Settings Added
+
+- `packaging_fee_auto_charge`
+- `merchant_shop_enabled`
+- `merchant_shop_show_storage_fees`
+- `merchant_shop_show_pick_pack_fees`
+- `merchant_shop_show_packaging_products`
+
+### Audit Events Added
+
+- `company_catalog_item_created`
+- `company_catalog_item_updated`
+- `company_catalog_item_deleted`
+- `order_packaging_items_updated`
+- `merchant_shop_previewed`
+
+### Export Support Added
+
+- export type: `company_catalog_items`

@@ -1,13 +1,14 @@
 <?php
 
 use App\Models\Merchant;
+use App\Modules\CompanyCatalog\Models\CompanyCatalogItem;
 use App\Modules\Driver\Models\DriverManifest;
 use App\Modules\Finance\Models\Expense;
 use App\Modules\Finance\Models\MerchantInvoice;
 use App\Modules\Finance\Models\MerchantPayout;
+use App\Modules\Finance\Models\TreasuryTransaction;
 use App\Modules\MerchantIntegration\Models\MerchantIntegrationToken;
 use App\Modules\MerchantPortal\Models\MerchantInboundStockRequest;
-use App\Modules\Finance\Models\TreasuryTransaction;
 use App\Modules\Order\Models\Order;
 use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\WarehouseReturn;
@@ -22,6 +23,7 @@ return [
         'merchant_payouts' => MerchantPayout::class,
         'merchant_integration_tokens' => MerchantIntegrationToken::class,
         'merchant_inbound_stock_requests' => MerchantInboundStockRequest::class,
+        'company_catalog_items' => CompanyCatalogItem::class,
         'warehouse_returns' => WarehouseReturn::class,
         'treasury_transactions' => TreasuryTransaction::class,
         'driver_manifests' => DriverManifest::class,

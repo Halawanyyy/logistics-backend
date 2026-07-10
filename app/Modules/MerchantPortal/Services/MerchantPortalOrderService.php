@@ -10,6 +10,7 @@ use App\Modules\Order\Enums\OrderSource;
 use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Models\Order;
 use App\Modules\Order\Services\OrderLifecycleService;
+use App\Modules\Order\Services\OrderPackagingService;
 use App\Modules\Warehouse\Enums\OrderStockReservationStatus;
 use App\Modules\Warehouse\Enums\WarehouseFulfillmentStatus;
 use App\Modules\Warehouse\Services\OrderWarehouseStatusService;
@@ -26,13 +27,13 @@ class MerchantPortalOrderService
         private readonly ConfirmOrderAction $confirmOrderAction,
         private readonly CreateOrderAction $createOrderAction,
         private readonly OrderLifecycleService $orderLifecycleService,
+        private readonly OrderPackagingService $orderPackagingService,
         private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
         private readonly WarehouseOrderReservationService $warehouseOrderReservationService,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function queryForMerchant(int $merchantId, array $filters = []): Builder
     {
@@ -74,7 +75,7 @@ class MerchantPortalOrderService
     }
 
     /**
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      */
     public function createForMerchant(array $validated, int $merchantId, ?int $userId): Order
     {
@@ -89,7 +90,7 @@ class MerchantPortalOrderService
     }
 
     /**
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      */
     public function update(Order $order, array $validated): Order
     {
@@ -106,6 +107,8 @@ class MerchantPortalOrderService
                 $lockedOrder->items()->delete();
                 $lockedOrder->items()->createMany($this->buildItemsPayload($validated['items']));
             }
+
+            $this->orderPackagingService->syncFromPayload($lockedOrder, $validated);
 
             return $lockedOrder->fresh()->load($this->relations());
         });
@@ -188,7 +191,7 @@ class MerchantPortalOrderService
     }
 
     /**
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
     private function buildOrderAttributes(array $validated): array
@@ -215,6 +218,7 @@ class MerchantPortalOrderService
             'allow_inspection',
             'requires_packaging',
             'package_notes',
+            'total_packaging_fee',
             'notes',
         ]);
 
@@ -238,7 +242,7 @@ class MerchantPortalOrderService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $items
+     * @param  array<int, array<string, mixed>>  $items
      * @return array<int, array<string, mixed>>
      */
     private function buildItemsPayload(array $items): array
@@ -267,6 +271,7 @@ class MerchantPortalOrderService
             'shipment',
             'latestStockReservation',
             'items',
+            'packagingItems',
         ];
     }
 

@@ -5,11 +5,12 @@ namespace App\Modules\Export\Services;
 use App\Modules\Audit\Enums\AuditEventType;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Audit\Services\AuditLogService;
+use App\Modules\CompanyCatalog\Models\CompanyCatalogItem;
 use App\Modules\Driver\Models\DriverManifest;
 use App\Modules\Export\Models\ExportLog;
-use App\Modules\Finance\Models\MerchantWalletTransaction;
 use App\Modules\Finance\Models\MerchantInvoice;
 use App\Modules\Finance\Models\MerchantPayout;
+use App\Modules\Finance\Models\MerchantWalletTransaction;
 use App\Modules\Finance\Models\TreasuryTransaction;
 use App\Modules\Finance\Services\FinanceReportService;
 use App\Modules\MerchantPortal\Models\MerchantInboundStockRequest;
@@ -42,14 +43,14 @@ class ExportService
         'warehouse_inventory',
         'treasury_transactions',
         'audit_logs',
+        'company_catalog_items',
     ];
 
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly FinanceReportService $financeReportService,
         private readonly SystemSettingService $systemSettingService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -154,6 +155,7 @@ class ExportService
             'warehouse_inventory' => $this->warehouseInventoryRows($filters),
             'treasury_transactions' => $this->treasuryRows($filters),
             'audit_logs' => $this->auditLogRows($filters),
+            'company_catalog_items' => $this->companyCatalogRows($filters),
             default => [],
         };
     }
@@ -577,6 +579,33 @@ class ExportService
                 'notes' => $log->notes,
                 'ip_address' => $log->ip_address,
                 'created_at' => $log->created_at?->toISOString(),
+            ])->values()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return list<array<string, scalar|null>>
+     */
+    private function companyCatalogRows(array $filters): array
+    {
+        return CompanyCatalogItem::query()
+            ->when(isset($filters['type']), fn (Builder $query) => $query->where('type', $filters['type']))
+            ->when(isset($filters['category']), fn (Builder $query) => $query->where('category', $filters['category']))
+            ->when(isset($filters['status']), fn (Builder $query) => $query->where('status', $filters['status']))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (CompanyCatalogItem $item) => [
+                'id' => $item->id,
+                'type' => $item->type,
+                'category' => $item->category,
+                'name' => $item->name,
+                'sku' => $item->sku,
+                'unit_price' => $item->unit_price,
+                'currency' => $item->currency,
+                'status' => $item->status,
+                'is_visible_to_merchants' => $item->is_visible_to_merchants ? 'true' : 'false',
+                'created_at' => $item->created_at?->toISOString(),
             ])->values()->all();
     }
 }

@@ -1220,3 +1220,148 @@ Final polish
 - Attachments should be reusable across entity detail screens.
 - Exports should be asynchronous-ready even if current implementation is immediate.
 
+---
+
+## 26. Admin Catalog Screen
+
+### Screen
+
+`/admin/company-catalog`
+
+### Purpose
+
+- Manage company-owned packaging products and service catalog items.
+- This is not merchant inventory and should not reuse warehouse product screens.
+
+### Main UI
+
+- Tabs or filter chips by type:
+  - Packaging Products
+  - Storage Services
+  - Fulfillment Services
+  - Other Services
+- Table columns:
+  - Name
+  - SKU
+  - Type
+  - Category
+  - Unit Price
+  - Merchant Visible
+  - Status
+  - Sort Order
+
+### APIs
+
+```text
+GET /api/company-catalog-items
+POST /api/company-catalog-items
+GET /api/company-catalog-items/{companyCatalogItem}
+PUT /api/company-catalog-items/{companyCatalogItem}
+DELETE /api/company-catalog-items/{companyCatalogItem}
+```
+
+### Permissions
+
+- `company_catalog.view`
+- `company_catalog.create`
+- `company_catalog.update`
+- `company_catalog.delete`
+
+---
+
+## 27. Order Packaging Selection Flow
+
+### Screen Impact
+
+- Admin order create
+- Admin order edit
+- Future merchant portal order create/edit
+
+### UI Behavior
+
+1. Keep the current `requires_packaging` and `package_notes` fields.
+2. If packaging is enabled, show one or more packaging lines.
+3. Each line should allow:
+   - packaging product dropdown
+   - quantity
+   - optional notes
+4. Show backend-calculated `total_packaging_fee`.
+
+### Data Rules
+
+- Only active catalog items with `type = packaging_product` should be selectable.
+- Do not mix packaging product dropdowns with warehouse product selectors.
+- If packaging is turned off, clear packaging lines before submit.
+
+### Order Payload Additions
+
+```text
+requires_packaging
+package_notes
+packaging_items[]
+```
+
+### Order Response Additions
+
+```text
+total_packaging_fee
+packaging_items[]
+```
+
+---
+
+## 28. Merchant Shop Preview Screen
+
+### Screen
+
+Inside merchant details or as a dedicated preview page:
+
+`/admin/merchants/{merchantId}/shop-preview`
+
+### Purpose
+
+- Let admin verify exactly what the merchant-facing shop will show.
+
+### Sections
+
+- Packaging products
+- Storage fee rules
+- Pick & pack fee rules
+- Visible services
+
+### APIs
+
+```text
+GET /api/merchant-shop/catalog
+GET /api/merchant-shop/pricing
+GET /api/merchants/{merchant}/shop-preview
+```
+
+### Important Notes
+
+- Read-only display only.
+- No cart.
+- No checkout.
+- No purchase flow.
+- Respect merchant shop settings when a section is disabled.
+
+---
+
+## 29. Merchant Store Future Page
+
+### Future Merchant Portal Placement
+
+`/merchant/store`
+
+### Expected Behavior
+
+- Show merchant-visible packaging products and service catalog entries.
+- Show merchant pricing references like storage and pick-pack rules.
+- Keep this page informational only in the current backend phase.
+
+### Do Not Build Yet
+
+- cart
+- checkout
+- payment flow
+- catalog purchase flow

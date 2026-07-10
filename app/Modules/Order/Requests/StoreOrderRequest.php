@@ -78,6 +78,16 @@ class StoreOrderRequest extends FormRequest
             'allow_inspection' => ['nullable', 'boolean'],
             'requires_packaging' => ['nullable', 'boolean'],
             'package_notes' => ['nullable', 'string'],
+            'packaging_items' => ['nullable', 'array'],
+            'packaging_items.*.company_catalog_item_id' => [
+                'required_with:packaging_items',
+                Rule::exists('company_catalog_items', 'id')->where(fn ($query) => $query
+                    ->whereNull('deleted_at')
+                    ->where('status', 'active')
+                    ->where('type', 'packaging_product')),
+            ],
+            'packaging_items.*.quantity' => ['required_with:packaging_items', 'integer', 'min:1'],
+            'packaging_items.*.notes' => ['nullable', 'string'],
 
             'source' => ['nullable', Rule::in(OrderSource::values())],
             'external_source' => ['nullable', 'string', 'max:100'],
@@ -129,6 +139,7 @@ class StoreOrderRequest extends FormRequest
 
             if ($pickupGovernorateId === null) {
                 $validator->errors()->add('pickup_governorate_id', __('validation.custom.pickup_governorate_id.required_with_pickup_area'));
+
                 return;
             }
 

@@ -84,7 +84,7 @@ class MerchantPortalOrderController
     public function confirm(Request $request, int $order): MerchantPortalOrderDetailResource
     {
         $merchantUser = $this->merchantPortalAccessService->currentMerchantUser($request);
-        $this->merchantPortalAccessService->assertCapability($merchantUser, 'orders.update');
+        $this->merchantPortalAccessService->assertCapability($merchantUser, 'orders.confirm');
 
         $ownedOrder = $this->merchantPortalOrderService->findOwned(
             $this->merchantPortalAccessService->merchantId($request),
@@ -99,7 +99,7 @@ class MerchantPortalOrderController
     public function cancel(Request $request, int $order): MerchantPortalOrderDetailResource
     {
         $merchantUser = $this->merchantPortalAccessService->currentMerchantUser($request);
-        $this->merchantPortalAccessService->assertCapability($merchantUser, 'orders.update');
+        $this->merchantPortalAccessService->assertCapability($merchantUser, 'orders.cancel');
 
         $ownedOrder = $this->merchantPortalOrderService->findOwned(
             $this->merchantPortalAccessService->merchantId($request),

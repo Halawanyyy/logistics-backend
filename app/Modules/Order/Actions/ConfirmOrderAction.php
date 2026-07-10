@@ -6,14 +6,15 @@ use App\Modules\Audit\Enums\AuditEventType;
 use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Models\Order;
+use App\Modules\Order\Services\OrderPackagingChargeService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
 class ConfirmOrderAction
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
-    ) {
-    }
+        private readonly OrderPackagingChargeService $orderPackagingChargeService,
+    ) {}
 
     public function execute(Order $order): Order
     {
@@ -54,7 +55,10 @@ class ConfirmOrderAction
             'confirmed',
         );
 
-        return $order->fresh();
+        $confirmedOrder = $order->fresh();
+        $this->orderPackagingChargeService->sync($confirmedOrder);
+
+        return $confirmedOrder;
     }
 
     private function fail(string $message): never

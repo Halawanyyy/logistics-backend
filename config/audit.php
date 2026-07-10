@@ -3,19 +3,20 @@
 use App\Models\Merchant;
 use App\Models\User;
 use App\Modules\Attachment\Models\Attachment;
+use App\Modules\CompanyCatalog\Models\CompanyCatalogItem;
 use App\Modules\Driver\Models\Driver;
 use App\Modules\Driver\Models\DriverManifest;
+use App\Modules\Export\Models\ExportLog;
 use App\Modules\Finance\Models\Expense;
 use App\Modules\Finance\Models\MerchantPayout;
 use App\Modules\Finance\Models\MerchantWalletTransaction;
 use App\Modules\Finance\Models\TreasuryTransaction;
-use App\Modules\Export\Models\ExportLog;
 use App\Modules\MerchantIntegration\Models\MerchantIntegrationToken;
 use App\Modules\Order\Models\Order;
 use App\Modules\RolePermission\Models\Permission;
 use App\Modules\RolePermission\Models\Role;
-use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Settings\Models\SystemSetting;
+use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\PackingTask;
 use App\Modules\Warehouse\Models\PickingList;
 use App\Modules\Warehouse\Models\StockMovement;
@@ -61,5 +62,6 @@ return [
         'attachment' => Attachment::class,
         'export_log' => ExportLog::class,
         'merchant_integration_token' => MerchantIntegrationToken::class,
+        'company_catalog_item' => CompanyCatalogItem::class,
     ],
 ];

@@ -18,7 +18,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Merchant extends Model
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
+
+    /** @use HasFactory<MerchantFactory> */
+    use HasFactory;
 
     /**
      * @var list<string>

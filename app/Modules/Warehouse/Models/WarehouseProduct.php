@@ -3,6 +3,9 @@
 namespace App\Modules\Warehouse\Models;
 
 use App\Models\Merchant;
+use App\Traits\Auditable;
+use Database\Factories\WarehouseProductFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +13,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WarehouseProduct extends Model
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
+
+    /** @use HasFactory<WarehouseProductFactory> */
+    use HasFactory;
 
     /**
      * @var list<string>

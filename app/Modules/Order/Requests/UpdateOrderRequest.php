@@ -81,6 +81,16 @@ class UpdateOrderRequest extends FormRequest
             'allow_inspection' => ['sometimes', 'boolean'],
             'requires_packaging' => ['sometimes', 'boolean'],
             'package_notes' => ['sometimes', 'nullable', 'string'],
+            'packaging_items' => ['sometimes', 'array'],
+            'packaging_items.*.company_catalog_item_id' => [
+                'required_with:packaging_items',
+                Rule::exists('company_catalog_items', 'id')->where(fn ($query) => $query
+                    ->whereNull('deleted_at')
+                    ->where('status', 'active')
+                    ->where('type', 'packaging_product')),
+            ],
+            'packaging_items.*.quantity' => ['required_with:packaging_items', 'integer', 'min:1'],
+            'packaging_items.*.notes' => ['nullable', 'string'],
 
             'source' => ['sometimes', Rule::in(OrderSource::values())],
             'external_source' => ['sometimes', 'nullable', 'string', 'max:100'],
@@ -138,6 +148,7 @@ class UpdateOrderRequest extends FormRequest
 
             if ($finalPickupGovernorateId === null) {
                 $validator->errors()->add('pickup_governorate_id', 'The pickup governorate field is required when pickup area is present.');
+
                 return;
             }
 

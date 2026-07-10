@@ -10,7 +10,12 @@ use App\Modules\LocationPricing\Models\Area;
 use App\Modules\LocationPricing\Models\Governorate;
 use App\Modules\Order\Enums\OrderType;
 use App\Modules\Order\Models\Order;
+use App\Modules\Order\Models\Order;
 use App\Modules\Order\Models\OrderItem;
+use App\Modules\Shipment\Enums\ShipmentStatus;
+use Database\Factories\ShipmentFactory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -18,7 +23,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Shipment extends Model
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
+
+    /** @use HasFactory<ShipmentFactory> */
+    use HasFactory;
 
     /**
      * @var list<string>
