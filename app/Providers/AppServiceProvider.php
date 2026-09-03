@@ -29,6 +29,13 @@ class AppServiceProvider extends ServiceProvider
                 ->by($request->ip().'|'.$email);
         });
 
+        RateLimiter::for('merchant-registration', function (Request $request): Limit {
+            $email = strtolower((string) $request->input('email', 'guest'));
+
+            return Limit::perHour((int) env('RATE_LIMIT_MERCHANT_REGISTRATION_PER_HOUR', 5))
+                ->by($request->ip().'|'.$email);
+        });
+
         RateLimiter::for('public-tracking', function (Request $request): Limit {
             return Limit::perMinute((int) env('RATE_LIMIT_PUBLIC_TRACKING_PER_MINUTE', 120))
                 ->by((string) $request->ip());

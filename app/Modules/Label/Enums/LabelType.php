@@ -5,10 +5,16 @@ namespace App\Modules\Label\Enums;
 final class LabelType
 {
     public const WAREHOUSE_PRODUCT = 'warehouse_product';
+
     public const SHIPMENT = 'shipment';
+
     public const ORDER = 'order';
+
     public const WAREHOUSE_BIN = 'warehouse_bin';
+
     public const DRIVER_MANIFEST = 'driver_manifest';
+
+    public const WAYBILL = 'waybill';
 
     /**
      * @return list<string>
@@ -21,6 +27,7 @@ final class LabelType
             self::ORDER,
             self::WAREHOUSE_BIN,
             self::DRIVER_MANIFEST,
+            self::WAYBILL,
         ];
     }
 }

@@ -10,8 +10,7 @@ class LabelSettingsService
 {
     public function __construct(
         private readonly SystemSettingService $systemSettingService,
-    ) {
-    }
+    ) {}
 
     public function resolveFormat(?string $format): string
     {
@@ -34,7 +33,7 @@ class LabelSettingsService
                 (float) $this->systemSettingService->get('product_label_width_mm', 60),
                 (float) $this->systemSettingService->get('product_label_height_mm', 40),
             ],
-            LabelType::SHIPMENT => [
+            LabelType::SHIPMENT, LabelType::WAYBILL => [
                 (float) $this->systemSettingService->get('shipment_label_width_mm', 100),
                 (float) $this->systemSettingService->get('shipment_label_height_mm', 150),
             ],
@@ -56,7 +55,7 @@ class LabelSettingsService
     }
 
     /**
-     * @param array{width_mm: float, height_mm: float} $dimensions
+     * @param  array{width_mm: float, height_mm: float}  $dimensions
      * @return array<string, bool|float|int|string>
      */
     public function options(array $dimensions): array

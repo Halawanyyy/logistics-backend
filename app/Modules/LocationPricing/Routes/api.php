@@ -31,6 +31,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{shippingRate}', [ShippingRateController::class, 'show'])->middleware('permission:shipping_rates.view');
         Route::put('/{shippingRate}', [ShippingRateController::class, 'update'])->middleware('permission:shipping_rates.update');
         Route::delete('/{shippingRate}', [ShippingRateController::class, 'destroy'])->middleware('permission:shipping_rates.delete');
+        Route::post('/{shippingRate}/restore', [ShippingRateController::class, 'restore'])->middleware('permission:shipping_rates.delete')->withTrashed();
+        Route::delete('/{shippingRate}/force', [ShippingRateController::class, 'forceDestroy'])->middleware('permission:shipping_rates.delete')->withTrashed();
     });
 
     Route::prefix('pricing-plans')->group(function () {

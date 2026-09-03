@@ -13,12 +13,11 @@ class LabelRenderService
         private readonly LabelSettingsService $labelSettingsService,
         private readonly LabelTsplService $labelTsplService,
         private readonly LabelZplService $labelZplService,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string, mixed> $label
-     * @param array<string, mixed> $options
+     * @param  array<string, mixed>  $label
+     * @param  array<string, mixed>  $options
      */
     public function renderLabel(array $label, array $options = []): Response
     {
@@ -26,8 +25,8 @@ class LabelRenderService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $labels
-     * @param array<string, mixed> $options
+     * @param  array<int, array<string, mixed>>  $labels
+     * @param  array<string, mixed>  $options
      */
     public function renderLabels(array $labels, string $labelType, array $options = []): Response
     {
@@ -67,8 +66,66 @@ class LabelRenderService
     }
 
     /**
-     * @param array<string, mixed> $manifest
-     * @param array<string, mixed> $options
+     * @param  array<int, array<string, mixed>>  $labels
+     * @param  array<string, mixed>  $options
+     */
+    public function renderSimpleWaybillLabels(array $labels, array $options = []): Response
+    {
+        $format = $this->labelSettingsService->resolveFormat($options['format'] ?? null);
+
+        if ($format === LabelFormat::JSON) {
+            $data = array_map(fn (array $label): array => [
+                'waybill_number' => $label['waybill_number'],
+                'barcode' => $label['barcode'],
+            ], $labels);
+
+            return response()->json([
+                'data' => count($data) === 1 ? $data[0] : $data,
+            ]);
+        }
+
+        $dimensions = $this->labelSettingsService->dimensionsFor(
+            'waybill',
+            isset($options['width_mm']) ? (float) $options['width_mm'] : null,
+            isset($options['height_mm']) ? (float) $options['height_mm'] : null,
+        );
+        $settings = $this->labelSettingsService->options($dimensions);
+        $filename = $options['filename'] ?? 'simple-waybill-labels';
+        $download = (bool) ($options['download'] ?? false);
+        $rawPrinterLabels = array_map(fn (array $label): array => [
+            'title' => $label['waybill_number'],
+            'barcode' => $label['barcode'],
+            'lines' => [],
+        ], $labels);
+
+        return match ($format) {
+            LabelFormat::HTML => $this->htmlResponse(
+                $this->labelHtmlService->renderSimpleWaybillLabels($labels, $settings),
+                $filename,
+                $download,
+            ),
+            LabelFormat::PDF => $this->binaryResponse(
+                $this->labelPdfService->renderSimpleWaybillLabels($labels, $settings),
+                'application/pdf',
+                $filename.'.pdf',
+                $download,
+            ),
+            LabelFormat::ZPL => $this->textResponse(
+                $this->labelZplService->renderLabels($rawPrinterLabels, $settings),
+                $filename.'.zpl',
+                $download,
+            ),
+            LabelFormat::TSPL => $this->textResponse(
+                $this->labelTsplService->renderLabels($rawPrinterLabels, $settings),
+                $filename.'.tspl',
+                $download,
+            ),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $manifest
+     * @param  array<string, mixed>  $options
      */
     public function renderManifest(array $manifest, array $options = []): Response
     {
@@ -126,8 +183,8 @@ class LabelRenderService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $labels
-     * @param array{width_mm: float, height_mm: float} $dimensions
+     * @param  array<int, array<string, mixed>>  $labels
+     * @param  array{width_mm: float, height_mm: float}  $dimensions
      * @return array<string, mixed>
      */
     private function jsonPayload(array $labels, string $format, array $dimensions): array

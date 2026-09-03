@@ -2,6 +2,7 @@
 
 namespace App\Modules\Merchant\Requests;
 
+use App\Modules\Merchant\Enums\MerchantStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,7 +24,7 @@ class StoreMerchantRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'unique:merchants,email'],
             'address' => ['nullable', 'string'],
-            'status' => ['nullable', 'string', Rule::in(['active', 'inactive'])],
+            'status' => ['nullable', 'string', Rule::in(MerchantStatus::values())],
             'pricing_plan_id' => [
                 'nullable',
                 Rule::exists('pricing_plans', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),

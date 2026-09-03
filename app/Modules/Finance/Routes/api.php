@@ -19,6 +19,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [DriverCashClosureController::class, 'store'])->middleware('permission:drivers.cash_closure');
         Route::get('/{driverCashClosure}', [DriverCashClosureController::class, 'show'])->middleware('permission:drivers.cash_closure');
         Route::put('/{driverCashClosure}', [DriverCashClosureController::class, 'update'])->middleware('permission:drivers.cash_closure');
+        Route::post('/{driverCashClosure}/verify', [DriverCashClosureController::class, 'verify'])->middleware('permission:drivers.cash_closure.verify');
         Route::delete('/{driverCashClosure}', [DriverCashClosureController::class, 'destroy'])->middleware('permission:drivers.cash_closure');
     });
 

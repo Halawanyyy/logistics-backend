@@ -3,23 +3,23 @@
 namespace App\Services;
 
 use App\Modules\Order\Models\Order;
-use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Settings\Services\SystemSettingService;
+use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\WarehouseBin;
 use App\Modules\Warehouse\Models\WarehouseProduct;
+use App\Modules\Waybill\Models\Waybill;
 use Illuminate\Database\Eloquent\Model;
 
 class BarcodeService
 {
     public function __construct(
         private readonly SystemSettingService $systemSettingService,
-    ) {
-    }
+    ) {}
 
     public function generateOrderBarcode(): string
     {
         return $this->generateSequentialBarcode(
-            model: new Order(),
+            model: new Order,
             column: 'barcode',
             prefix: $this->dateBasedPrefix(
                 (string) $this->systemSettingService->get('order_barcode_prefix', 'ORD-BC')
@@ -30,7 +30,7 @@ class BarcodeService
     public function generateShipmentBarcode(): string
     {
         return $this->generateSequentialBarcode(
-            model: new Shipment(),
+            model: new Shipment,
             column: 'barcode',
             prefix: $this->dateBasedPrefix(
                 (string) $this->systemSettingService->get('shipment_barcode_prefix', 'SHP-BC')
@@ -41,7 +41,7 @@ class BarcodeService
     public function generateWarehouseProductBarcode(int $merchantId): string
     {
         return $this->generateSequentialBarcode(
-            model: new WarehouseProduct(),
+            model: new WarehouseProduct,
             column: 'barcode',
             prefix: sprintf(
                 '%s-%d-%s-',
@@ -55,7 +55,7 @@ class BarcodeService
     public function generateWarehouseBinBarcode(): string
     {
         return $this->generateSequentialBarcode(
-            model: new WarehouseBin(),
+            model: new WarehouseBin,
             column: 'barcode',
             prefix: $this->dateBasedPrefix(
                 (string) $this->systemSettingService->get('warehouse_bin_barcode_prefix', 'BIN-BC')
@@ -100,6 +100,15 @@ class BarcodeService
             }
         }
 
+        $waybill = Waybill::query()->where('waybill_number', $barcode)->first();
+
+        if ($waybill !== null) {
+            return [
+                'type' => 'waybill',
+                'model' => $waybill,
+            ];
+        }
+
         return null;
     }
 
@@ -112,6 +121,7 @@ class BarcodeService
             'order' => [Order::class, 'barcode'],
             'shipment' => [Shipment::class, 'barcode'],
             'warehouse_product' => [WarehouseProduct::class, 'barcode'],
+            'waybill' => [Waybill::class, 'barcode'],
         ];
     }
 
@@ -126,9 +136,6 @@ class BarcodeService
         ];
     }
 
-    /**
-     * @param  Model  $model
-     */
     private function generateSequentialBarcode(Model $model, string $column, string $prefix): string
     {
         $latestBarcode = $model::query()

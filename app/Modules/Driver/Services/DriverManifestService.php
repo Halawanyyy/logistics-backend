@@ -9,14 +9,12 @@ use App\Modules\Driver\Models\DriverManifest;
 use App\Modules\Driver\Models\DriverManifestItem;
 use App\Modules\Finance\Enums\DriverCashClosureStatus;
 use App\Modules\Finance\Models\DriverCashClosure;
-use App\Modules\Finance\Services\TreasuryService;
 use App\Modules\Order\Enums\PaymentType;
 use App\Modules\Shipment\Enums\ShipmentStatus;
 use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Shipment\Services\ShipmentStatusUpdateService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DriverManifestService
@@ -24,9 +22,7 @@ class DriverManifestService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly ShipmentStatusUpdateService $shipmentStatusUpdateService,
-        private readonly TreasuryService $treasuryService,
-    ) {
-    }
+    ) {}
 
     public function generate(array $data, ?int $userId): DriverManifest
     {
@@ -161,8 +157,11 @@ class DriverManifestService
                     $this->fail('Manifest contains a missing shipment reference.');
                 }
 
-                if (! in_array($shipment->status, $this->closableShipmentStatuses(), true)) {
-                    $this->fail('Cannot close manifest with unresolved shipments.');
+                if ($shipment->status !== ShipmentStatus::DELIVERED) {
+                    $this->fail(
+                        'Cannot close manifest until all shipments are delivered. '
+                        .$shipment->shipment_number.' is currently '.$shipment->status.'.'
+                    );
                 }
 
                 $deliveredCodAmount = $this->shipmentExpectedCodAtClose($shipment);
@@ -195,15 +194,13 @@ class DriverManifestService
                     'expected_amount' => number_format($expectedAmount, 2, '.', ''),
                     'received_amount' => number_format($actualReceivedAmount, 2, '.', ''),
                     'difference_amount' => number_format($differenceAmount, 2, '.', ''),
-                    'status' => DriverCashClosureStatus::VERIFIED,
+                    'status' => DriverCashClosureStatus::PENDING,
                     'notes' => $data['notes'] ?? $manifest->notes,
                     'created_by' => $manifest->cashClosure?->created_by ?? $userId,
-                    'verified_by' => $userId,
-                    'verified_at' => now(),
+                    'verified_by' => null,
+                    'verified_at' => null,
                 ]
             );
-
-            $this->treasuryService->syncDriverCashClosure($cashClosure, $userId);
 
             $this->auditLogService->log(
                 AuditEventType::MANIFEST_CLOSED,
@@ -250,14 +247,6 @@ class DriverManifestService
     {
         return [
             ShipmentStatus::DELIVERED,
-            ShipmentStatus::PARTIALLY_DELIVERED,
-            ShipmentStatus::FAILED,
-            ShipmentStatus::DELIVERY_ATTEMPTED,
-            ShipmentStatus::RESCHEDULED,
-            ShipmentStatus::RETURNED,
-            ShipmentStatus::RETURNED_TO_HUB,
-            ShipmentStatus::RETURNED_TO_WAREHOUSE,
-            ShipmentStatus::CANCELLED,
         ];
     }
 

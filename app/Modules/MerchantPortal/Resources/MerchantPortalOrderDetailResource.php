@@ -19,6 +19,7 @@ class MerchantPortalOrderDetailResource extends JsonResource
     {
         $labels = app(LocalizedLabelService::class);
         $shipment = $this->relationLoaded('shipment') ? $this->shipment : null;
+        $waybill = $this->relationLoaded('waybill') ? $this->waybill : null;
         $latestStockReservation = $this->relationLoaded('latestStockReservation') ? $this->latestStockReservation : null;
         $canModify = $shipment === null
             && ! in_array((string) $this->status, [
@@ -60,6 +61,13 @@ class MerchantPortalOrderDetailResource extends JsonResource
             'id' => $this->id,
             'order_number' => $this->order_number,
             'barcode' => $this->barcode,
+            'waybill' => $waybill === null ? null : [
+                'id' => $waybill->id,
+                'waybill_number' => $waybill->waybill_number,
+                'barcode' => $waybill->barcode,
+                'status' => $waybill->status,
+                'source' => $waybill->source,
+            ],
             'status' => $this->status,
             'status_label' => $labels->label('orders.status', $this->status),
             'order_type' => $this->order_type,

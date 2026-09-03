@@ -12,6 +12,7 @@ use App\Modules\Order\Services\OrderPackagingService;
 use App\Modules\Order\Services\OrderShippingFeeService;
 use App\Modules\Settings\Services\SystemSettingService;
 use App\Modules\Warehouse\Services\OrderWarehouseStatusService;
+use App\Modules\Waybill\Services\WaybillAssignmentService;
 use App\Services\BarcodeService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Arr;
@@ -26,6 +27,7 @@ class CreateOrderAction
         private readonly OrderShippingFeeService $orderShippingFeeService,
         private readonly SystemSettingService $systemSettingService,
         private readonly OrderWarehouseStatusService $orderWarehouseStatusService,
+        private readonly WaybillAssignmentService $waybillAssignmentService,
     ) {}
 
     /**
@@ -46,6 +48,14 @@ class CreateOrderAction
             $order = Order::create($orderData);
             $order->items()->createMany($this->buildItemsPayload($validated['items']));
             $this->orderPackagingService->syncFromPayload($order, $validated, $userId);
+
+            if (($validated['waybill_mode'] ?? 'automatic') === 'preprinted') {
+                $this->waybillAssignmentService->assignPreprinted(
+                    $order,
+                    (string) $validated['preprinted_waybill_number'],
+                    $userId,
+                );
+            }
 
             return $order->load($this->relations());
         });
@@ -213,6 +223,7 @@ class CreateOrderAction
             'latestStockReservation',
             'items',
             'packagingItems',
+            'waybill',
         ];
     }
 }

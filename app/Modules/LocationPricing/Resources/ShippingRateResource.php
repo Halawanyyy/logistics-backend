@@ -19,6 +19,8 @@ class ShippingRateResource extends JsonResource
             'area_id' => $this->area_id,
             'area_name' => $this->whenLoaded('area', fn () => $this->area?->name),
             'shipping_fee' => $this->shipping_fee,
+            'swap_fee' => $this->swap_fee,
+            'return_fee' => $this->return_fee,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,
         ];

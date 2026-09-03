@@ -32,11 +32,13 @@ class MerchantPortalDashboardService
         $ordersQuery = Order::query()
             ->where('merchant_id', $merchantId)
             ->when(isset($filters['date_from']), fn (Builder $query) => $query->whereDate('created_at', '>=', $filters['date_from']))
-            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']));
+            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']))
+            ->when(isset($filters['delivery_governorate_id']), fn (Builder $query) => $query->where('delivery_governorate_id', $filters['delivery_governorate_id']));
         $shipmentsQuery = Shipment::query()
             ->where('merchant_id', $merchantId)
             ->when(isset($filters['date_from']), fn (Builder $query) => $query->whereDate('created_at', '>=', $filters['date_from']))
-            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']));
+            ->when(isset($filters['date_to']), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']))
+            ->when(isset($filters['delivery_governorate_id']), fn (Builder $query) => $query->where('delivery_governorate_id', $filters['delivery_governorate_id']));
 
         $warehouseSection = $this->merchantPortalAccessService->can($merchantUser, 'warehouse.view')
             ? $this->warehouseSummary($merchantId)

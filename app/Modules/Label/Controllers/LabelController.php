@@ -16,8 +16,7 @@ class LabelController
         private readonly LabelDataBuilderService $labelDataBuilderService,
         private readonly LabelRenderService $labelRenderService,
         private readonly LabelSettingsService $labelSettingsService,
-    ) {
-    }
+    ) {}
 
     public function templates(): JsonResponse
     {
@@ -29,6 +28,7 @@ class LabelController
                     ['type' => LabelType::ORDER, 'name' => 'Order Label'],
                     ['type' => LabelType::WAREHOUSE_BIN, 'name' => 'Warehouse Bin Label'],
                     ['type' => LabelType::DRIVER_MANIFEST, 'name' => 'Driver Manifest Document'],
+                    ['type' => LabelType::WAYBILL, 'name' => 'Pre-Printed Waybill Label'],
                 ],
                 ...$this->labelSettingsService->settingsPayload(),
             ],

@@ -23,8 +23,7 @@ class ResourceLabelController
         private readonly LabelDataBuilderService $labelDataBuilderService,
         private readonly LabelRenderService $labelRenderService,
         private readonly WarehouseProductBarcodeService $warehouseProductBarcodeService,
-    ) {
-    }
+    ) {}
 
     public function warehouseProductLabel(RenderLabelRequest $request, WarehouseProduct $warehouseProduct): Response
     {
@@ -93,7 +92,7 @@ class ResourceLabelController
     {
         $validated = $request->validated();
         $shipments = Shipment::query()
-            ->with(['merchant', 'order', 'deliveryGovernorate', 'deliveryArea'])
+            ->with(['merchant', 'order', 'deliveryGovernorate', 'deliveryArea', 'waybill'])
             ->whereIn('id', $validated['shipment_ids'])
             ->get();
         $labels = [];
@@ -137,7 +136,7 @@ class ResourceLabelController
     private function ensureOrderBarcode(Order $order): Order
     {
         if ($order->barcode !== null && $order->barcode !== '') {
-            return $order->fresh()->load(['merchant', 'deliveryGovernorate', 'deliveryArea', 'items']);
+            return $order->fresh()->load(['merchant', 'deliveryGovernorate', 'deliveryArea', 'items', 'waybill']);
         }
 
         return DB::transaction(function () use ($order) {
@@ -149,14 +148,14 @@ class ResourceLabelController
                 ]);
             }
 
-            return $lockedOrder->fresh()->load(['merchant', 'deliveryGovernorate', 'deliveryArea', 'items']);
+            return $lockedOrder->fresh()->load(['merchant', 'deliveryGovernorate', 'deliveryArea', 'items', 'waybill']);
         });
     }
 
     private function ensureShipmentBarcode(Shipment $shipment): Shipment
     {
         if ($shipment->barcode !== null && $shipment->barcode !== '') {
-            return $shipment->fresh()->load(['merchant', 'order', 'deliveryGovernorate', 'deliveryArea']);
+            return $shipment->fresh()->load(['merchant', 'order', 'deliveryGovernorate', 'deliveryArea', 'waybill']);
         }
 
         return DB::transaction(function () use ($shipment) {
@@ -168,7 +167,7 @@ class ResourceLabelController
                 ]);
             }
 
-            return $lockedShipment->fresh()->load(['merchant', 'order', 'deliveryGovernorate', 'deliveryArea']);
+            return $lockedShipment->fresh()->load(['merchant', 'order', 'deliveryGovernorate', 'deliveryArea', 'waybill']);
         });
     }
 

@@ -31,6 +31,7 @@ class PublicShipmentTrackingResource extends JsonResource
 
         return [
             'shipment_number' => $this->shipment_number,
+            'waybill_number' => $this->relationLoaded('waybill') ? $this->waybill?->waybill_number : null,
             'status' => $this->status,
             'current_status' => $this->status,
             'status_label' => $labels->label('shipments.status', $this->status),

@@ -77,18 +77,23 @@ class EnsureMerchantPortalUser
             return $this->forbidden();
         }
 
-        $activeMemberships = $memberships->filter(function (MerchantUser $merchantUser): bool {
-            return $merchantUser->status === MerchantPortalUserStatus::ACTIVE
-                && $merchantUser->merchant !== null
-                && $merchantUser->merchant->deleted_at === null
-                && $merchantUser->merchant->status === 'active';
+        $validMemberships = $memberships->filter(function (MerchantUser $merchantUser): bool {
+            return $merchantUser->merchant !== null
+                && $merchantUser->merchant->deleted_at === null;
         })->values();
 
-        if ($activeMemberships->count() !== 1) {
+        if ($validMemberships->count() !== 1) {
             return $this->forbidden();
         }
 
-        $merchantUser = $activeMemberships->first();
+        $merchantUser = $validMemberships->first();
+
+        $hasSafeSuspendedAccess = $merchantUser->status === MerchantPortalUserStatus::SUSPENDED
+            && $this->isSafeAccountEndpoint($request);
+
+        if ($merchantUser->status !== MerchantPortalUserStatus::ACTIVE && ! $hasSafeSuspendedAccess) {
+            return $this->forbidden();
+        }
 
         $request->attributes->set('merchant_portal_user', $merchantUser);
         $request->attributes->set('merchant', $merchantUser->merchant);
@@ -100,6 +105,17 @@ class EnsureMerchantPortalUser
     private function containsMerchantOverride(Request $request): bool
     {
         return $request->query->has('merchant_id') || $request->request->has('merchant_id');
+    }
+
+    private function isSafeAccountEndpoint(Request $request): bool
+    {
+        return $request->is(
+            'api/merchant-portal/me',
+            'api/merchant-portal/profile',
+            'api/merchant-portal/settings',
+            'api/merchant-portal/notifications',
+            'api/merchant-portal/notifications/*',
+        );
     }
 
     private function forbidden(): JsonResponse

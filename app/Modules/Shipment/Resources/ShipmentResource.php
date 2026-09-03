@@ -14,6 +14,7 @@ class ShipmentResource extends JsonResource
     public function toArray(Request $request): array
     {
         $labels = app(LocalizedLabelService::class);
+        $waybill = $this->relationLoaded('waybill') ? $this->waybill : null;
 
         return [
             'id' => $this->id,
@@ -21,6 +22,13 @@ class ShipmentResource extends JsonResource
             'shipment_number' => $this->shipment_number,
             'tracking_number' => $this->shipment_number,
             'barcode' => $this->barcode,
+            'waybill' => $waybill === null ? null : [
+                'id' => $waybill->id,
+                'waybill_number' => $waybill->waybill_number,
+                'barcode' => $waybill->barcode,
+                'status' => $waybill->status,
+                'source' => $waybill->source,
+            ],
             'merchant_id' => $this->merchant_id,
             'merchant_name' => $this->whenLoaded('merchant', fn () => $this->merchant?->name),
             'customer_name' => $this->customer_name,

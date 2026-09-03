@@ -79,16 +79,64 @@ class DriverManifestFlowTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.status', ShipmentStatus::DELIVERED);
 
-        $this->postJson('/api/driver-manifests/'.$manifestId.'/close', [
+        $closeResponse = $this->postJson('/api/driver-manifests/'.$manifestId.'/close', [
             'actual_received_amount' => 300,
             'notes' => 'Driver returned cash',
-        ])->assertOk()
+        ]);
+
+        $cashClosureId = $closeResponse
+            ->assertOk()
             ->assertJsonPath('data.status', 'closed')
-            ->assertJsonPath('data.cash_closure.expected_amount', '300.00');
+            ->assertJsonPath('data.cash_closure.expected_amount', '300.00')
+            ->assertJsonPath('data.cash_closure.status', 'pending')
+            ->assertJsonPath('data.cash_closure.verified_by', null)
+            ->json('data.cash_closure.id');
 
         $this->assertDatabaseHas('driver_cash_closures', [
             'driver_manifest_id' => $manifestId,
             'driver_id' => $driver->id,
+            'status' => 'pending',
+        ]);
+
+        $admin = $this->actingAsRole('admin');
+
+        $this->postJson('/api/driver-cash-closures/'.$cashClosureId.'/verify')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'verified')
+            ->assertJsonPath('data.verified_by', $admin->id);
+    }
+
+    public function test_manifest_cannot_close_until_every_shipment_is_delivered(): void
+    {
+        $merchant = $this->makeMerchant();
+        [$governorate, $area] = $this->makeLocation();
+        $driver = $this->makeDriver();
+        $order = $this->makeOrder($merchant, $governorate, $area, [
+            'status' => OrderStatus::CONFIRMED,
+            'cod_amount' => '300.00',
+        ]);
+
+        $shipmentId = $this->postJson('/api/orders/'.$order->id.'/shipments')
+            ->assertOk()
+            ->json('data.id');
+
+        $this->patchJson('/api/shipments/'.$shipmentId.'/status', [
+            'status' => ShipmentStatus::READY_FOR_DISPATCH,
+        ])->assertOk();
+
+        $manifestId = $this->postJson('/api/driver-manifests/generate', [
+            'driver_id' => $driver->id,
+            'manifest_date' => '2026-05-24',
+            'shipment_ids' => [$shipmentId],
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson('/api/driver-manifests/'.$manifestId.'/close', [
+            'actual_received_amount' => 300,
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', fn (string $message): bool => str_contains($message, 'until all shipments are delivered'));
+
+        $this->assertDatabaseMissing('driver_cash_closures', [
+            'driver_manifest_id' => $manifestId,
         ]);
     }
 }

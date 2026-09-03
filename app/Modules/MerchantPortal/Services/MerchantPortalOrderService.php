@@ -272,6 +272,7 @@ class MerchantPortalOrderService
             'latestStockReservation',
             'items',
             'packagingItems',
+            'waybill',
         ];
     }
 

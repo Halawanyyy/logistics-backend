@@ -79,6 +79,8 @@ class IntegrationOrderController
             'requires_packaging' => ['nullable', 'boolean'],
             'package_notes' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
+            'waybill_mode' => ['nullable', Rule::in(['automatic', 'preprinted'])],
+            'preprinted_waybill_number' => ['required_if:waybill_mode,preprinted', 'prohibited_unless:waybill_mode,preprinted', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_name' => ['required', 'string', 'max:255'],
             'items.*.sku' => ['nullable', 'string', 'max:255'],
@@ -142,6 +144,7 @@ class IntegrationOrderController
             'shipment',
             'latestStockReservation',
             'items',
+            'waybill',
         ])))
             ->response()
             ->setStatusCode(201);

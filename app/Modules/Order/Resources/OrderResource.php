@@ -17,6 +17,7 @@ class OrderResource extends JsonResource
         $shipment = $this->relationLoaded('shipment') ? $this->shipment : null;
         $latestStockReservation = $this->relationLoaded('latestStockReservation') ? $this->latestStockReservation : null;
         $hasStockReservations = $latestStockReservation !== null;
+        $waybill = $this->relationLoaded('waybill') ? $this->waybill : null;
         $shipmentSummary = $shipment !== null ? [
             'shipment_id' => $shipment->id,
             'shipment_number' => $shipment->shipment_number,
@@ -30,6 +31,13 @@ class OrderResource extends JsonResource
             'merchant_name' => $this->whenLoaded('merchant', fn () => $this->merchant?->name),
             'order_number' => $this->order_number,
             'barcode' => $this->barcode,
+            'waybill' => $waybill === null ? null : [
+                'id' => $waybill->id,
+                'waybill_number' => $waybill->waybill_number,
+                'barcode' => $waybill->barcode,
+                'status' => $waybill->status,
+                'source' => $waybill->source,
+            ],
             'customer_name' => $this->customer_name,
             'customer_phone' => $this->customer_phone,
             'customer_phone_alt' => $this->customer_phone_alt,

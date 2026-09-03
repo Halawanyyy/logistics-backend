@@ -20,6 +20,12 @@ class MerchantPortalShipmentDetailResource extends JsonResource
             'shipment_number' => $this->shipment_number,
             'tracking_number' => $this->shipment_number,
             'barcode' => $this->barcode,
+            'waybill' => $this->relationLoaded('waybill') && $this->waybill !== null ? [
+                'id' => $this->waybill->id,
+                'waybill_number' => $this->waybill->waybill_number,
+                'barcode' => $this->waybill->barcode,
+                'source' => $this->waybill->source,
+            ] : null,
             'status' => $this->status,
             'status_label' => $labels->label('shipments.status', $this->status),
             'order_summary' => $this->relationLoaded('order') ? [

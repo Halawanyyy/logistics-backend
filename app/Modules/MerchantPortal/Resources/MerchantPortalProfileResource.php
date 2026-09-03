@@ -20,6 +20,9 @@ class MerchantPortalProfileResource extends JsonResource
             'email' => $this->email,
             'address' => $this->address,
             'status' => $this->status,
+            'registration_source' => $this->registration_source,
+            'reviewed_at' => $this->reviewed_at,
+            'rejection_reason' => $this->rejection_reason,
             'created_at' => $this->created_at,
         ];
     }

@@ -17,8 +17,7 @@ class MerchantController
 {
     public function __construct(
         private readonly DashboardSummaryService $dashboardSummaryService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -48,6 +47,7 @@ class MerchantController
             'address' => $request->input('address'),
             'status' => $request->input('status', 'active'),
             'pricing_plan_id' => $request->input('pricing_plan_id'),
+            'registration_source' => 'admin',
         ]);
 
         return (new MerchantResource($merchant->load('pricingPlan')))
@@ -62,7 +62,29 @@ class MerchantController
 
     public function update(UpdateMerchantRequest $request, Merchant $merchant): MerchantResource
     {
-        $merchant->update($request->validated());
+        $validated = $request->validated();
+
+        if ($merchant->registration_source === 'self_registration'
+            && $merchant->status === 'pending'
+            && isset($validated['status'])
+            && $validated['status'] !== 'pending') {
+            abort(response()->json([
+                'code' => 'USE_MERCHANT_REGISTRATION_REVIEW',
+                'message' => 'Pending self-registrations must be approved or rejected through the registration review endpoints.',
+            ], 409));
+        }
+
+        if ($merchant->registration_source === 'self_registration'
+            && $merchant->status === 'rejected'
+            && isset($validated['status'])
+            && $validated['status'] !== 'rejected') {
+            abort(response()->json([
+                'code' => 'INVALID_MERCHANT_REGISTRATION_TRANSITION',
+                'message' => 'Rejected registrations cannot be reactivated without a resubmission workflow.',
+            ], 409));
+        }
+
+        $merchant->update($validated);
 
         return new MerchantResource($merchant->fresh()->load('pricingPlan'));
     }

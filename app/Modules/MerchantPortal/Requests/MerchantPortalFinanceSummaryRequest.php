@@ -14,6 +14,7 @@ class MerchantPortalFinanceSummaryRequest extends MerchantFinanceSummaryRequest
         return [
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'delivery_governorate_id' => ['nullable', 'integer', 'exists:governorates,id'],
             'merchant_id' => ['prohibited'],
         ];
     }

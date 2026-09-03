@@ -4,6 +4,20 @@ namespace App\Modules\Audit\Enums;
 
 class AuditEventType
 {
+    public const MERCHANT_REGISTERED = 'merchant_registered';
+
+    public const MERCHANT_REGISTRATION_APPROVED = 'merchant_registration_approved';
+
+    public const MERCHANT_REGISTRATION_REJECTED = 'merchant_registration_rejected';
+
+    public const WAYBILL_BATCH_GENERATED = 'waybill_batch_generated';
+
+    public const WAYBILL_BATCH_REPRINTED = 'waybill_batch_reprinted';
+
+    public const WAYBILL_ASSIGNED = 'waybill_assigned';
+
+    public const WAYBILL_VOIDED = 'waybill_voided';
+
     public const ORDER_CREATED = 'order_created';
 
     public const ORDER_UPDATED = 'order_updated';

@@ -269,6 +269,7 @@ class OrderController
             'latestStockReservation',
             'items',
             'packagingItems',
+            'waybill',
         ];
     }
 

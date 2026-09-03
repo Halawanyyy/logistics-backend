@@ -7339,3 +7339,285 @@ Merchant pricing preview response example:
 ### Export Support Added
 
 - export type: `company_catalog_items`
+
+---
+
+## Merchant Self-Registration and Admin Approval
+
+### Domain distinction
+
+- A `Merchant` is the company/account boundary and owns operational data.
+- A `MerchantUser` links a normal Sanctum `User` login to one merchant and gives it a portal role.
+- Self-registration creates one Merchant, one User login, and one primary MerchantUser with the `owner` role in one database transaction.
+- Passwords are hashed and are never returned by registration, status, or review resources.
+
+### Registration lifecycle
+
+```text
+self-registration -> pending -> active
+                             -> rejected
+active -> suspended
+```
+
+- `pending`: authentication and safe account/status APIs only.
+- `active`: normal role-capability and operational access.
+- `rejected`: authentication and safe status APIs only; `/merchant-portal/me` includes the rejection reason.
+- `suspended`: authentication and safe status APIs only; operational calls return a distinct suspension code.
+
+### Public merchant registration
+
+`POST /api/merchant-portal/register`
+
+- Authentication: public
+- Rate limiter: `merchant-registration` (default 5 attempts/hour per IP + email)
+- Public callers cannot set status, pricing, roles, permissions, finance fields, review fields, or merchant/user IDs.
+
+Request:
+
+```json
+{
+  "company_name": "ABC Store",
+  "owner_name": "Ahmed Mohamed",
+  "email": "merchant@example.com",
+  "phone": "01000000000",
+  "password": "password123",
+  "password_confirmation": "password123",
+  "address": "Cairo, Egypt",
+  "governorate_id": null,
+  "area_id": null
+}
+```
+
+The email must be unique across user logins and merchants. When both location fields are supplied, the area must belong to the governorate.
+
+Success (`201`):
+
+```json
+{
+  "message": "Registration submitted successfully. Your account is waiting for administrator approval.",
+  "data": {
+    "merchant_id": 10,
+    "company_name": "ABC Store",
+    "status": "pending",
+    "registered_at": "2026-08-12T12:00:00.000000Z"
+  }
+}
+```
+
+### Merchant status endpoint
+
+`GET /api/merchant-portal/me`
+
+Pending, rejected, and suspended merchants may call this authenticated endpoint. Its merchant object includes `status`, `registration_source`, `registered_at`, `reviewed_at`, and `rejection_reason`. Non-active merchants receive only safe account capabilities.
+
+Allowed while non-active:
+
+- `/api/merchant-portal/me`
+- `/api/merchant-portal/profile`
+- `/api/merchant-portal/settings`
+- `/api/merchant-portal/notifications*`
+
+Operational errors use HTTP `403`:
+
+```json
+{
+  "code": "MERCHANT_PENDING_APPROVAL",
+  "message": "Your merchant account is pending admin approval."
+}
+```
+
+Other codes are `MERCHANT_REGISTRATION_REJECTED` and `MERCHANT_SUSPENDED`.
+
+### Admin registration queue
+
+All endpoints require Sanctum plus the permission shown:
+
+| Method | Endpoint | Permission | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/merchant-registration-requests` | `merchant_registration.view` | Paginated queue/history; defaults to pending |
+| GET | `/api/merchant-registration-requests/{merchant}` | `merchant_registration.view` | Company, owner, registration, and decision details |
+| POST | `/api/merchant-registration-requests/{merchant}/approve` | `merchant_registration.approve` | Explicit pending-to-active decision |
+| POST | `/api/merchant-registration-requests/{merchant}/reject` | `merchant_registration.reject` | Explicit pending-to-rejected decision |
+
+List filters: `status`, `search`, `company_name`, `owner_email`, `phone`, `date_from`, `date_to`, and `per_page`.
+
+Approve request:
+
+```json
+{
+  "pricing_plan_id": 2,
+  "notes": "Approved after verification"
+}
+```
+
+Reject request (reason is required, maximum 1000 characters):
+
+```json
+{
+  "reason": "Business information could not be verified."
+}
+```
+
+Only `pending` self-registrations can transition. Repeated/conflicting decisions return HTTP `409` with `INVALID_MERCHANT_REGISTRATION_TRANSITION`; no duplicate decision notification or audit event is created. Merchant portal users cannot review their own merchant.
+
+### Review metadata, audit, and notifications
+
+The merchant stores `registration_source`, location IDs, `reviewed_by`, `reviewed_at`, `rejection_reason`, and `approval_notes`. Admin-created merchants use source `admin`; self-registered merchants use `self_registration`.
+
+Audit event types:
+
+- `merchant_registered`
+- `merchant_registration_approved`
+- `merchant_registration_rejected`
+
+In-app merchant notification types:
+
+- `merchant_registration_submitted`
+- `merchant_registration_approved`
+- `merchant_registration_rejected`
+
+No external mail provider is introduced.
+
+---
+
+## Reserved / Pre-Printed Waybills
+
+### Numbering model and compatibility
+
+Orders, shipments, and waybills remain separate identifiers:
+
+- orders keep the existing daily `ORD-YYYYMMDD-######` number and `ORD-BC-YYYYMMDD-######` barcode;
+- shipments keep the existing daily `SHP-YYYYMMDD-######` number and `SHP-BC-YYYYMMDD-######` barcode;
+- waybills use the new persistent `WB-######` sequence by default, and the waybill barcode contains that waybill number.
+
+Before this feature, both the shipment label and `/api/shipments/{shipment}/waybill` printed the shipment number/barcode. Historical shipments without a Waybill record continue to do that. New shipment labels retain the shipment number as their reference and additionally print the linked waybill number/barcode. Existing shipment-number tracking remains valid; public tracking also accepts a linked waybill number or barcode.
+
+Automatic and pre-printed waybills use the same `number_sequences.key = waybill` row. A transaction takes a row-level lock and advances the sequence once for an individual number or an entire range. A batch therefore permanently consumes its range before labels are rendered. `waybills.waybill_number` and non-null `waybills.barcode` also have database unique constraints. Reprinting only reads persisted rows and never calls the generator.
+
+The migration initializes the sequence above the highest historical order/shipment number or barcode that exactly matches the compatible `WB-{digits}` format. It does not rewrite existing orders, shipments, labels, or tracking numbers.
+
+### States and sources
+
+- `source`: `automatic` or `preprinted`
+- `status`: `available`, `assigned`, or `void`
+
+Only an `available` pre-printed waybill may be assigned by scan/number. Assignment is immutable in the MVP. A void number is permanently consumed and cannot be assigned or returned to the pool.
+
+### Admin batch APIs
+
+All routes require Sanctum authentication and the indicated permission.
+
+| Method | Endpoint | Permission | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/waybill-batches` | `waybills.view` | Paginated batches, per-batch counts, and global KPI summary |
+| POST | `/api/waybill-batches` | `waybills.generate` | Atomically reserve and persist a pre-printed range |
+| GET | `/api/waybill-batches/{batch}` | `waybills.view` | Batch metadata and its waybills/order/shipment assignments |
+| GET | `/api/waybill-batches/{batch}/print` | `waybills.print` | Print or reprint the persisted batch |
+| GET | `/api/waybill-batches/{batch}/simple-labels/print` | `waybills.print` | Print minimal number-and-barcode labels for the persisted batch |
+| GET | `/api/waybills/{waybill}/label` | `waybills.view` | Reprint one persisted waybill |
+| GET | `/api/waybills/{waybill}/simple-label` | `waybills.print` | Render only the waybill number and its barcode |
+| POST | `/api/waybills/{waybill}/void` | `waybills.void` | Permanently void an available waybill |
+
+List filters are `created_from`, `created_to`, `generated_by`, `search`, and `per_page` (maximum 100). The top-level `summary` contains `total_generated`, `available`, `assigned`, and `void`. Batch detail returns every waybill in the batch; the configured batch maximum bounds this collection.
+
+Generate request:
+
+```json
+{
+  "quantity": 50,
+  "label_template": "default",
+  "notes": "Warehouse desk batch"
+}
+```
+
+`quantity` is 1 through `max_preprinted_waybill_batch_size` (default 500). The response includes `batch_number`, quantity, first/last number, status counts, generator, and all generated waybills. Printing accepts the existing label query options such as `format=html|pdf|zpl|tspl|json`; it uses the shipment label dimensions. A pre-order label contains only the real waybill number/barcode, source indicator, and status—never fabricated recipient, address, COD, or item data.
+
+#### Minimal physical label
+
+`GET /api/waybills/{waybill}/simple-label` returns a minimal label containing only the Waybill Number and its barcode. The barcode always encodes the exact `waybill_number`, regardless of any stored barcode value. Supported formats follow the existing label convention: `json`, `html`, `pdf`, `zpl`, and `tspl`; omitting `format` uses the configured default label format.
+
+The JSON response exposes no other Waybill fields:
+
+```json
+{
+  "data": {
+    "waybill_number": "WB-001245",
+    "barcode": "WB-001245"
+  }
+}
+```
+
+The printable variants contain the centered number, a Code 128 barcode, and its human-readable number. They contain no company, logo, customer, phone, address, COD, order, shipment, status, date, product, merchant, or other metadata. Available pre-printed, assigned, and void waybills follow the existing reprint policy and may be rendered; rendering never changes their state.
+
+For batch pre-printing, use `GET /api/waybill-batches/{batch}/simple-labels/print`. It renders the same minimal layout once for every persisted waybill in the batch. The existing `/print` endpoint is unchanged for backward compatibility. Neither individual nor batch simple printing generates a number, advances the central sequence, creates a Waybill, or assigns a record.
+
+Void request:
+
+```json
+{
+  "reason": "Label damaged before use"
+}
+```
+
+### Order and shipment assignment
+
+Admin, Merchant Portal, and merchant integration order-create payloads accept these additive fields:
+
+```json
+{
+  "waybill_mode": "preprinted",
+  "preprinted_waybill_number": "WB-001027"
+}
+```
+
+`waybill_mode` defaults to `automatic`. In automatic mode no additional input is needed and, consistent with the existing lifecycle, the waybill is generated when a shipment is created. In preprinted mode, `preprinted_waybill_number` is required and may contain either the waybill number or its barcode. The Waybill row is locked and assigned inside the order transaction. If order creation rolls back, the assignment and its audit record roll back too.
+
+When a shipment is created, an order's existing pre-printed waybill is linked to that shipment. No second number is generated. If the order has no waybill, the shipment workflow obtains one automatic number from the same central sequence. Order and shipment resources expose an additive `waybill` object; old clients may ignore it.
+
+Optional scan validation (this does not reserve the number):
+
+```text
+POST /api/waybills/validate
+```
+
+```json
+{
+  "waybill_number": "WB-001027"
+}
+```
+
+Any authenticated order-creation client may validate. Final assignment is still authoritative and can return `409` if another request assigned the number first. Merchant users cannot generate/view Admin batches, void waybills, or manage settings unless explicitly granted Admin permissions.
+
+### Barcode and public tracking behavior
+
+`POST /api/barcodes/lookup` recognizes a waybill barcode and returns a `waybill` resource. Shipment status scanning also resolves a linked waybill barcode to its shipment. `GET /api/track/{trackingNumber}` resolves the original `shipment_number`, or a linked `waybill_number`/waybill barcode. Existing shipment numbers are unchanged.
+
+### Permissions, settings, audit, and errors
+
+Permissions:
+
+- `waybills.view`
+- `waybills.generate`
+- `waybills.print`
+- `waybills.void`
+
+Settings:
+
+- `waybill_prefix` (default `WB-`)
+- `waybill_padding` (default `6`)
+- `max_preprinted_waybill_batch_size` (default `500`)
+
+Prefix/padding changes apply only to future sequence values; historical strings are never reformatted. Audit events are `waybill_batch_generated`, `waybill_batch_reprinted`, `waybill_assigned`, and `waybill_voided`.
+
+Business errors use the following stable codes:
+
+| Code | HTTP | Meaning |
+| --- | ---: | --- |
+| `WAYBILL_NOT_FOUND` | 404 | Number/barcode does not exist |
+| `WAYBILL_ALREADY_ASSIGNED` | 409 | Another order already consumed it |
+| `WAYBILL_VOID` | 409 | Number is permanently void |
+| `WAYBILL_NOT_AVAILABLE` | 409 | Existing order waybill cannot be linked |
+| `INVALID_WAYBILL_SOURCE` | 422 | Automatic waybill was supplied as pre-printed |
+| `WAYBILL_BATCH_LIMIT_EXCEEDED` | 422 | Quantity exceeds the configured maximum |
+
+Authorization failures remain HTTP `403` under the standard permission middleware.

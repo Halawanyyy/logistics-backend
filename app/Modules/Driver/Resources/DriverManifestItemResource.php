@@ -26,6 +26,7 @@ class DriverManifestItemResource extends JsonResource
             'cod_amount' => $this->cod_amount,
             'shipping_fee' => $this->shipping_fee,
             'shipment_status_at_loadout' => $this->shipment_status_at_loadout,
+            'current_status' => $this->whenLoaded('shipment', fn () => $this->shipment?->status),
             'final_status' => $this->final_status,
             'delivered_cod_amount' => $this->delivered_cod_amount,
             'notes' => $this->notes,

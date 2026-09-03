@@ -14,7 +14,7 @@ Base prefix:
 
 - authentication uses the existing Sanctum login flow
 - no separate merchant auth guard was added
-- a successful login token can access merchant portal routes only if the user has an active `merchant_users` membership
+- a successful login token can access merchant portal routes when the user has a valid merchant membership; non-active merchants are restricted to account/status endpoints
 
 ## 3. Merchant Portal Roles
 
@@ -430,3 +430,12 @@ The following remain internal/admin-only:
 - changing shipment operational statuses
 - accessing internal profit and reconciliation views
 - creating system-wide exports outside merchant scope
+
+## 23. Self-Registration and Merchant Lifecycle
+
+- Public sign-up: `POST /api/merchant-portal/register` (rate limited, no Sanctum token required).
+- Registration creates the merchant, login user, and primary owner membership transactionally with merchant status `pending`.
+- `/api/merchant-portal/me`, profile, settings, and notifications remain available for pending, rejected, and suspended merchants.
+- All operational APIs require merchant status `active` and return lifecycle-specific `403` codes otherwise.
+- `/api/merchant-portal/me` exposes registration/review status data, including the rejection reason when present.
+- Admin decisions use explicit registration request endpoints; portal users cannot set merchant lifecycle status.

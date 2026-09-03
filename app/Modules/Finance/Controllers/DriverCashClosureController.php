@@ -15,7 +15,9 @@ use App\Modules\Finance\Services\DriverCashClosureExpectedAmountService;
 use App\Modules\Finance\Services\FinanceSummaryService;
 use App\Modules\Finance\Services\TreasuryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\ValidationException;
 
 class DriverCashClosureController
 {
@@ -23,8 +25,7 @@ class DriverCashClosureController
         private readonly FinanceSummaryService $financeSummaryService,
         private readonly DriverCashClosureExpectedAmountService $driverCashClosureExpectedAmountService,
         private readonly TreasuryService $treasuryService,
-    ) {
-    }
+    ) {}
 
     public function index(ListDriverCashClosuresRequest $request): AnonymousResourceCollection
     {
@@ -44,6 +45,8 @@ class DriverCashClosureController
 
     public function store(StoreDriverCashClosureRequest $request): JsonResponse
     {
+        $this->ensureCanVerify($request, $request->validated());
+
         $closure = DriverCashClosure::create(
             $this->preparePayload($request->validated(), null, $request->user()?->id)
         );
@@ -63,6 +66,7 @@ class DriverCashClosureController
     public function generate(GenerateDriverCashClosureRequest $request, Driver $driver): JsonResponse
     {
         $validated = $request->validated();
+        $this->ensureCanVerify($request, $validated);
         $expectedAmount = $this->driverCashClosureExpectedAmountService->calculate($driver, $validated['date']);
 
         $closure = DriverCashClosure::create(
@@ -86,6 +90,8 @@ class DriverCashClosureController
 
     public function update(UpdateDriverCashClosureRequest $request, DriverCashClosure $driverCashClosure): DriverCashClosureResource
     {
+        $this->ensureCanVerify($request, $request->validated(), $driverCashClosure);
+
         $driverCashClosure->update(
             $this->preparePayload($request->validated(), $driverCashClosure, $request->user()?->id)
         );
@@ -93,6 +99,28 @@ class DriverCashClosureController
         $this->treasuryService->syncDriverCashClosure($driverCashClosure->fresh(), $request->user()?->id);
 
         return new DriverCashClosureResource($driverCashClosure->fresh()->load(['driver', 'driverManifest', 'treasuryAccount', 'createdBy', 'verifiedBy']));
+    }
+
+    public function verify(Request $request, DriverCashClosure $driverCashClosure): DriverCashClosureResource
+    {
+        if ($driverCashClosure->status !== DriverCashClosureStatus::PENDING) {
+            throw ValidationException::withMessages([
+                'status' => 'Only pending driver cash closures can be verified.',
+            ]);
+        }
+
+        $driverCashClosure->update([
+            'status' => DriverCashClosureStatus::VERIFIED,
+            'verified_by' => $request->user()?->id,
+            'verified_at' => now(),
+        ]);
+
+        $driverCashClosure = $driverCashClosure->fresh();
+        $this->treasuryService->syncDriverCashClosure($driverCashClosure, $request->user()?->id);
+
+        return new DriverCashClosureResource(
+            $driverCashClosure->fresh()->load(['driver', 'driverManifest', 'treasuryAccount', 'createdBy', 'verifiedBy'])
+        );
     }
 
     public function destroy(DriverCashClosure $driverCashClosure): JsonResponse
@@ -118,7 +146,7 @@ class DriverCashClosureController
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function preparePayload(array $data, ?DriverCashClosure $driverCashClosure, ?int $userId): array
@@ -143,5 +171,20 @@ class DriverCashClosureController
         }
 
         return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function ensureCanVerify(Request $request, array $data, ?DriverCashClosure $driverCashClosure = null): void
+    {
+        $isVerification = ($data['status'] ?? null) === DriverCashClosureStatus::VERIFIED
+            && $driverCashClosure?->status !== DriverCashClosureStatus::VERIFIED;
+
+        if ($isVerification && ! $request->user()?->hasPermission('drivers.cash_closure.verify')) {
+            throw ValidationException::withMessages([
+                'status' => 'You do not have permission to verify driver cash closures.',
+            ]);
+        }
     }
 }

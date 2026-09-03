@@ -4,9 +4,13 @@ namespace App\Modules\Label\Services;
 
 class LabelPdfService
 {
+    public function __construct(
+        private readonly Code128BarcodeService $code128BarcodeService,
+    ) {}
+
     /**
-     * @param array<int, array<string, mixed>> $labels
-     * @param array<string, bool|float|int|string> $settings
+     * @param  array<int, array<string, mixed>>  $labels
+     * @param  array<string, bool|float|int|string>  $settings
      */
     public function renderLabels(array $labels, array $settings): string
     {
@@ -25,8 +29,27 @@ class LabelPdfService
     }
 
     /**
-     * @param array<string, mixed> $manifest
-     * @param array<string, bool|float|int|string> $settings
+     * @param  array<int, array<string, mixed>>  $labels
+     * @param  array<string, bool|float|int|string>  $settings
+     */
+    public function renderSimpleWaybillLabels(array $labels, array $settings): string
+    {
+        $pages = array_map(fn (array $label): array => [
+            'width_mm' => (float) $settings['width_mm'],
+            'height_mm' => (float) $settings['height_mm'],
+            'margin_mm' => (float) $settings['label_margin_mm'],
+            'font_size' => 18,
+            'line_spacing' => 22,
+            'lines' => [],
+            'simple_waybill_number' => (string) $label['waybill_number'],
+        ], $labels);
+
+        return $this->buildPdf($pages);
+    }
+
+    /**
+     * @param  array<string, mixed>  $manifest
+     * @param  array<string, bool|float|int|string>  $settings
      */
     public function renderManifest(array $manifest, array $settings): string
     {
@@ -76,7 +99,7 @@ class LabelPdfService
     }
 
     /**
-     * @param array<string, mixed> $label
+     * @param  array<string, mixed>  $label
      * @return list<string>
      */
     private function labelLines(array $label): array
@@ -108,7 +131,7 @@ class LabelPdfService
     }
 
     /**
-     * @param array<int, array{width_mm: float, height_mm: float, margin_mm: float, font_size: int, line_spacing: int, lines: array<int, string>}> $pages
+     * @param  array<int, array{width_mm: float, height_mm: float, margin_mm: float, font_size: int, line_spacing: int, lines: array<int, string>}>  $pages
      */
     private function buildPdf(array $pages): string
     {
@@ -176,10 +199,14 @@ class LabelPdfService
     }
 
     /**
-     * @param array{height_mm: float, margin_mm: float, font_size: int, line_spacing: int, lines: array<int, string>} $page
+     * @param  array{height_mm: float, margin_mm: float, font_size: int, line_spacing: int, lines: array<int, string>}  $page
      */
     private function pageStream(array $page): string
     {
+        if (isset($page['simple_waybill_number'])) {
+            return $this->simpleWaybillPageStream($page);
+        }
+
         $x = $this->mmToPoints($page['margin_mm']);
         $y = $this->mmToPoints($page['height_mm']) - $this->mmToPoints($page['margin_mm']) - $page['font_size'];
         $streamLines = [];
@@ -195,6 +222,41 @@ class LabelPdfService
         }
 
         return implode("\n", $streamLines);
+    }
+
+    /** @param array<string, mixed> $page */
+    private function simpleWaybillPageStream(array $page): string
+    {
+        $number = (string) $page['simple_waybill_number'];
+        $layout = $this->code128BarcodeService->layout($number);
+        $pageWidth = $this->mmToPoints((float) $page['width_mm']);
+        $pageHeight = $this->mmToPoints((float) $page['height_mm']);
+        $margin = $this->mmToPoints((float) $page['margin_mm']);
+        $availableWidth = $pageWidth - ($margin * 2);
+        $moduleWidth = $availableWidth / $layout['modules'];
+        $barcodeHeight = min($this->mmToPoints(35), $pageHeight * 0.32);
+        $barcodeY = ($pageHeight - $barcodeHeight) / 2;
+        $escaped = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $number);
+        $estimatedTextWidth = strlen($number) * 9;
+        $textX = max($margin, ($pageWidth - $estimatedTextWidth) / 2);
+        $stream = [
+            sprintf('BT /F1 18 Tf %.2f %.2f Td (%s) Tj ET', $textX, $barcodeY + $barcodeHeight + 28, $escaped),
+            '0 g',
+        ];
+
+        foreach ($layout['bars'] as $bar) {
+            $stream[] = sprintf(
+                '%.3f %.3f %.3f %.3f re f',
+                $margin + ($bar['offset'] * $moduleWidth),
+                $barcodeY,
+                $bar['width'] * $moduleWidth,
+                $barcodeHeight,
+            );
+        }
+
+        $stream[] = sprintf('BT /F1 12 Tf %.2f %.2f Td (%s) Tj ET', max($margin, ($pageWidth - (strlen($number) * 6)) / 2), $barcodeY - 18, $escaped);
+
+        return implode("\n", $stream);
     }
 
     private function mmToPoints(float $mm): float

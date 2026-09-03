@@ -2,14 +2,15 @@
 
 namespace App\Modules\Barcode\Controllers;
 
-use App\Services\BarcodeService;
-use App\Modules\Shipment\Enums\ShipmentStatus;
 use App\Modules\Order\Resources\OrderResource;
-use App\Modules\Shipment\Services\ShipmentStatusUpdateService;
+use App\Modules\Shipment\Enums\ShipmentStatus;
 use App\Modules\Shipment\Resources\ShipmentResource;
+use App\Modules\Shipment\Services\ShipmentStatusUpdateService;
 use App\Modules\Warehouse\Models\WarehouseProduct;
 use App\Modules\Warehouse\Resources\InventoryStockResource;
 use App\Modules\Warehouse\Resources\WarehouseProductResource;
+use App\Modules\Waybill\Resources\WaybillResource;
+use App\Services\BarcodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,8 +20,7 @@ class BarcodeController
     public function __construct(
         private readonly BarcodeService $barcodeService,
         private readonly ShipmentStatusUpdateService $shipmentStatusUpdateService,
-    ) {
-    }
+    ) {}
 
     public function lookup(Request $request): JsonResponse
     {
@@ -56,6 +56,14 @@ class BarcodeController
 
         $result = $this->barcodeService->lookup($validated['barcode']);
 
+        if ($result !== null && $result['type'] === 'waybill') {
+            $waybill = $result['model']->load('shipment');
+            $result = $waybill->shipment === null ? null : [
+                'type' => 'shipment',
+                'model' => $waybill->shipment,
+            ];
+        }
+
         if ($result === null || $result['type'] !== 'shipment') {
             return response()->json([
                 'message' => 'Barcode not found.',
@@ -79,6 +87,7 @@ class BarcodeController
             'histories.changedBy',
             'itemResults',
             'itemResults.orderItem',
+            'waybill',
         ]));
     }
 
@@ -143,6 +152,7 @@ class BarcodeController
                 'itemResults.orderItem',
             ])))->resolve(),
             'warehouse_product' => (new WarehouseProductResource($model->load('merchant')))->resolve(),
+            'waybill' => (new WaybillResource($model->load(['order', 'shipment'])))->resolve(),
             default => [],
         };
     }

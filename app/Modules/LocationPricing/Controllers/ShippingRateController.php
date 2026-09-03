@@ -31,12 +31,29 @@ class ShippingRateController
 
     public function store(StoreShippingRateRequest $request): JsonResponse
     {
-        $shippingRate = ShippingRate::create([
+        $shippingRate = ShippingRate::withTrashed()
+            ->where('governorate_id', $request->integer('governorate_id'))
+            ->when($request->input('area_id') !== null, fn ($q) => $q->where('area_id', $request->input('area_id')))
+            ->when($request->input('area_id') === null, fn ($q) => $q->whereNull('area_id'))
+            ->first();
+
+        $data = [
             'governorate_id' => $request->integer('governorate_id'),
             'area_id' => $request->input('area_id'),
             'shipping_fee' => $request->input('shipping_fee'),
+            'swap_fee' => $request->input('swap_fee'),
+            'return_fee' => $request->input('return_fee'),
             'is_active' => $request->has('is_active') ? $request->boolean('is_active') : true,
-        ]);
+        ];
+
+        if ($shippingRate) {
+            if ($shippingRate->trashed()) {
+                $shippingRate->restore();
+            }
+            $shippingRate->update($data);
+        } else {
+            $shippingRate = ShippingRate::create($data);
+        }
 
         return (new ShippingRateResource($shippingRate->load(['governorate', 'area'])))
             ->response()
@@ -67,6 +84,24 @@ class ShippingRateController
 
         return response()->json([
             'message' => 'Shipping rate deleted successfully',
+        ]);
+    }
+
+    public function restore(ShippingRate $shippingRate): JsonResponse
+    {
+        $shippingRate->restore();
+
+        return response()->json([
+            'message' => 'Shipping rate restored successfully',
+        ]);
+    }
+
+    public function forceDestroy(ShippingRate $shippingRate): JsonResponse
+    {
+        $shippingRate->forceDelete();
+
+        return response()->json([
+            'message' => 'Shipping rate permanently deleted',
         ]);
     }
 

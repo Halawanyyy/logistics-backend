@@ -156,6 +156,7 @@ class ShipmentController
             'histories.changedBy',
             'itemResults',
             'itemResults.orderItem',
+            'waybill',
         ];
     }
 }

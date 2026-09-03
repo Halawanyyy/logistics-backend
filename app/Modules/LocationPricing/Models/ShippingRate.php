@@ -17,6 +17,8 @@ class ShippingRate extends Model
         'governorate_id',
         'area_id',
         'shipping_fee',
+        'swap_fee',
+        'return_fee',
         'is_active',
     ];
 
@@ -27,6 +29,8 @@ class ShippingRate extends Model
     {
         return [
             'shipping_fee' => 'decimal:2',
+            'swap_fee' => 'decimal:2',
+            'return_fee' => 'decimal:2',
             'is_active' => 'boolean',
             'deleted_at' => 'datetime',
         ];

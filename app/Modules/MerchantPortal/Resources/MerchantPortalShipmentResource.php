@@ -21,6 +21,7 @@ class MerchantPortalShipmentResource extends JsonResource
         return [
             'id' => $this->id,
             'shipment_number' => $this->shipment_number,
+            'waybill_number' => $this->relationLoaded('waybill') ? $this->waybill?->waybill_number : null,
             'status' => $this->status,
             'status_label' => $labels->label('shipments.status', $this->status),
             'order_number' => $this->relationLoaded('order') ? $this->order?->order_number : null,

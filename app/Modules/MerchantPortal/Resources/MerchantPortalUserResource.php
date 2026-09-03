@@ -25,6 +25,8 @@ class MerchantPortalUserResource extends JsonResource
                 'name' => $this->user?->name,
                 'email' => $this->user?->email,
             ],
+            'name' => $this->user?->name,
+            'email' => $this->user?->email,
             'role' => $this->role,
             'role_label' => $labels->label('merchant_portal.role', $this->role),
             'status' => $this->status,

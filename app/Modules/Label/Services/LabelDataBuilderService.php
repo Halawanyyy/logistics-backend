@@ -9,7 +9,7 @@ use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\InventoryStock;
 use App\Modules\Warehouse\Models\WarehouseBin;
 use App\Modules\Warehouse\Models\WarehouseProduct;
-use Illuminate\Support\Collection;
+use App\Modules\Waybill\Models\Waybill;
 use Illuminate\Support\Str;
 
 class LabelDataBuilderService
@@ -74,6 +74,7 @@ class LabelDataBuilderService
             'order',
             'deliveryGovernorate',
             'deliveryArea',
+            'waybill',
         ]);
 
         $notes = $shipment->tracking_notes
@@ -85,8 +86,9 @@ class LabelDataBuilderService
             'title' => __('labels.shipment').' '.$shipment->shipment_number,
             'subtitle' => $shipment->merchant?->name,
             'reference' => $shipment->shipment_number,
-            'barcode' => $shipment->barcode,
+            'barcode' => $shipment->waybill?->barcode ?? $shipment->barcode,
             'lines' => [
+                ['label' => 'Waybill', 'value' => $shipment->waybill?->waybill_number ?? $shipment->shipment_number],
                 ['label' => __('labels.order'), 'value' => $shipment->order?->order_number ?? __('common.not_available')],
                 ['label' => __('labels.customer'), 'value' => $shipment->customer_name],
                 ['label' => __('labels.phone'), 'value' => $shipment->customer_phone],
@@ -103,7 +105,8 @@ class LabelDataBuilderService
             'data' => [
                 'shipment_id' => $shipment->id,
                 'shipment_number' => $shipment->shipment_number,
-                'barcode' => $shipment->barcode,
+                'waybill_number' => $shipment->waybill?->waybill_number,
+                'barcode' => $shipment->waybill?->barcode ?? $shipment->barcode,
                 'order_number' => $shipment->order?->order_number,
                 'merchant_name' => $shipment->merchant?->name,
                 'customer_name' => $shipment->customer_name,
@@ -132,6 +135,7 @@ class LabelDataBuilderService
             'deliveryGovernorate',
             'deliveryArea',
             'items',
+            'waybill',
         ]);
 
         return [
@@ -141,6 +145,7 @@ class LabelDataBuilderService
             'reference' => $order->order_number,
             'barcode' => $order->barcode,
             'lines' => [
+                ['label' => 'Waybill', 'value' => $order->waybill?->waybill_number ?? __('common.not_available')],
                 ['label' => __('labels.merchant'), 'value' => $order->merchant?->name ?? __('common.not_available')],
                 ['label' => __('labels.customer'), 'value' => $order->customer_name],
                 ['label' => __('labels.phone'), 'value' => $order->customer_phone],
@@ -153,6 +158,7 @@ class LabelDataBuilderService
             'data' => [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
+                'waybill_number' => $order->waybill?->waybill_number,
                 'barcode' => $order->barcode,
                 'merchant_name' => $order->merchant?->name,
                 'customer_name' => $order->customer_name,
@@ -165,6 +171,48 @@ class LabelDataBuilderService
                 'delivery_area' => $order->deliveryArea?->name,
                 'delivery_address' => $order->delivery_address,
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function forWaybill(Waybill $waybill): array
+    {
+        $waybill->loadMissing(['order', 'shipment']);
+
+        return [
+            'label_type' => LabelType::WAYBILL,
+            'title' => 'Waybill '.$waybill->waybill_number,
+            'subtitle' => $waybill->source === 'preprinted' ? 'Pre-Printed Waybill' : null,
+            'reference' => $waybill->waybill_number,
+            'barcode' => $waybill->barcode ?? $waybill->waybill_number,
+            'lines' => array_values(array_filter([
+                ['label' => 'Status', 'value' => ucfirst($waybill->status)],
+                $waybill->order === null ? null : ['label' => __('labels.order'), 'value' => $waybill->order->order_number],
+                $waybill->shipment === null ? null : ['label' => __('labels.shipment'), 'value' => $waybill->shipment->shipment_number],
+            ])),
+            'data' => [
+                'waybill_id' => $waybill->id,
+                'waybill_number' => $waybill->waybill_number,
+                'barcode' => $waybill->barcode,
+                'status' => $waybill->status,
+                'source' => $waybill->source,
+                'batch_id' => $waybill->batch_id,
+                'order_id' => $waybill->order_id,
+                'shipment_id' => $waybill->shipment_id,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function forSimpleWaybill(Waybill $waybill): array
+    {
+        return [
+            'waybill_number' => $waybill->waybill_number,
+            'barcode' => $waybill->waybill_number,
         ];
     }
 
@@ -253,7 +301,7 @@ class LabelDataBuilderService
     }
 
     /**
-     * @param array<string, mixed> $input
+     * @param  array<string, mixed>  $input
      * @return array<string, mixed>
      */
     public function preview(string $labelType, array $input = []): array
@@ -271,6 +319,9 @@ class LabelDataBuilderService
                 ['label' => __('labels.phone'), 'value' => '01000000000'],
                 ['label' => __('labels.address'), 'value' => 'Nasr City, Cairo'],
                 ['label' => __('labels.cod'), 'value' => '250.00'],
+            ],
+            LabelType::WAYBILL => [
+                ['label' => 'Status', 'value' => 'Available'],
             ],
             LabelType::ORDER => [
                 ['label' => __('labels.merchant'), 'value' => 'Demo Merchant'],
@@ -296,7 +347,7 @@ class LabelDataBuilderService
             'title' => $input['title'] ?? Str::headline(str_replace('_', ' ', $labelType)).' '.__('labels.preview'),
             'subtitle' => $input['subtitle'] ?? 'Demo Data',
             'reference' => $input['reference'] ?? 'REF-0001',
-            'barcode' => $input['barcode'] ?? 'LBL-DEMO-000001',
+            'barcode' => $input['barcode'] ?? ($labelType === LabelType::WAYBILL ? 'WB-000001' : 'LBL-DEMO-000001'),
             'lines' => $input['lines'] ?? $defaultLines,
             'items' => $input['items'] ?? [],
             'data' => [

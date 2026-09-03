@@ -29,6 +29,8 @@ class UpdateShippingRateRequest extends FormRequest
                 Rule::exists('areas', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
             'shipping_fee' => ['sometimes', 'numeric', 'min:0'],
+            'swap_fee' => ['sometimes', 'numeric', 'min:0'],
+            'return_fee' => ['sometimes', 'numeric', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

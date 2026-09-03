@@ -8,13 +8,13 @@ use App\Modules\LocationPricing\Models\Area;
 use App\Modules\LocationPricing\Models\Governorate;
 use App\Modules\Shipment\Models\Shipment;
 use App\Modules\Warehouse\Models\OrderStockReservation;
+use App\Modules\Waybill\Models\Waybill;
 use App\Traits\Auditable;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -132,6 +132,11 @@ class Order extends Model
     public function shipment(): HasOne
     {
         return $this->hasOne(Shipment::class);
+    }
+
+    public function waybill(): HasOne
+    {
+        return $this->hasOne(Waybill::class);
     }
 
     public function originalOrder(): BelongsTo

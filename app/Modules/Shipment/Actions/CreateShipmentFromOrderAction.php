@@ -5,9 +5,10 @@ namespace App\Modules\Shipment\Actions;
 use App\Modules\Order\Enums\OrderStatus;
 use App\Modules\Order\Models\Order;
 use App\Modules\Order\Services\OrderLifecycleService;
+use App\Modules\Settings\Services\SystemSettingService;
 use App\Modules\Shipment\Enums\ShipmentStatus;
 use App\Modules\Shipment\Models\Shipment;
-use App\Modules\Settings\Services\SystemSettingService;
+use App\Modules\Waybill\Services\WaybillAssignmentService;
 use App\Services\BarcodeService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
@@ -19,8 +20,8 @@ class CreateShipmentFromOrderAction
         private readonly OrderLifecycleService $orderLifecycleService,
         private readonly SystemSettingService $systemSettingService,
         private readonly BarcodeService $barcodeService,
-    ) {
-    }
+        private readonly WaybillAssignmentService $waybillAssignmentService,
+    ) {}
 
     public function execute(Order $order, ?int $userId): Shipment
     {
@@ -54,6 +55,8 @@ class CreateShipmentFromOrderAction
                 'created_by' => $userId,
             ]);
 
+            $this->waybillAssignmentService->linkOrCreateForShipment($lockedOrder, $shipment, $userId);
+
             $shipment->histories()->create([
                 'status' => $defaultStatus,
                 'notes' => 'Shipment created from order.',
@@ -64,7 +67,7 @@ class CreateShipmentFromOrderAction
                 'status' => OrderStatus::SHIPMENT_CREATED,
             ]);
 
-            return $shipment->fresh();
+            return $shipment->fresh('waybill');
         });
     }
 

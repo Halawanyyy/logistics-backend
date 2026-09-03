@@ -2,6 +2,7 @@
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Models\Merchant;
 use App\Modules\Shipment\Enums\ShipmentStatus;
 use App\Modules\Shipment\Models\Shipment;
 use Illuminate\Database\Eloquent\Builder;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 class DashboardSummaryService
 {
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
     public function getSummary(array $filters): array
@@ -50,6 +51,10 @@ class DashboardSummaryService
         });
 
         return [
+            'pending_merchant_registrations' => Merchant::query()
+                ->where('registration_source', 'self_registration')
+                ->where('status', 'pending')
+                ->count(),
             'company_profit' => number_format($companyProfit, 2, '.', ''),
             'merchants_payables' => number_format($merchantsPayables, 2, '.', ''),
             'cod_collected' => number_format($codCollected, 2, '.', ''),
@@ -71,7 +76,7 @@ class DashboardSummaryService
     }
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
     public function getMerchantSummary(int $merchantId, array $filters): array

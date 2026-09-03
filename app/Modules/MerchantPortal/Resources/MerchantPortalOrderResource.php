@@ -15,10 +15,12 @@ class MerchantPortalOrderResource extends JsonResource
     {
         $labels = app(LocalizedLabelService::class);
         $shipment = $this->relationLoaded('shipment') ? $this->shipment : null;
+        $waybill = $this->relationLoaded('waybill') ? $this->waybill : null;
 
         return [
             'id' => $this->id,
             'order_number' => $this->order_number,
+            'waybill_number' => $waybill?->waybill_number,
             'status' => $this->status,
             'status_label' => $labels->label('orders.status', $this->status),
             'fulfillment_type' => $this->fulfillment_type,

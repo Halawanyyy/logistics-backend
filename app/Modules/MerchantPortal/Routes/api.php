@@ -6,8 +6,8 @@ use App\Modules\MerchantPortal\Controllers\MerchantPortalDashboardController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalExportController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalFinanceController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalInboundStockRequestController;
-use App\Modules\MerchantPortal\Controllers\MerchantPortalInventoryController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalIntegrationTokenController;
+use App\Modules\MerchantPortal\Controllers\MerchantPortalInventoryController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalInvoiceController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalLocationController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalMeController;
@@ -15,16 +15,17 @@ use App\Modules\MerchantPortal\Controllers\MerchantPortalNotificationController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalOrderController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalPayoutController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalProfileController;
-use App\Modules\MerchantPortal\Controllers\MerchantPortalShipmentController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalSettingsController;
+use App\Modules\MerchantPortal\Controllers\MerchantPortalShipmentController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalStockMovementController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalUserManagementController;
+use App\Modules\MerchantPortal\Controllers\MerchantPortalUsersController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalWalletController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalWarehouseChargeController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalWarehouseProductController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'merchant.portal'])->prefix('merchant-portal')->group(function () {
+Route::middleware(['auth:sanctum', 'merchant.portal', 'merchant.operational'])->prefix('merchant-portal')->group(function () {
     Route::get('/me', [MerchantPortalMeController::class, 'show']);
     Route::get('/profile', [MerchantPortalProfileController::class, 'show']);
     Route::put('/profile', [MerchantPortalProfileController::class, 'update']);
@@ -137,6 +138,16 @@ Route::middleware(['auth:sanctum', 'merchant.portal'])->prefix('merchant-portal'
         Route::get('/unread-count', [MerchantPortalNotificationController::class, 'unreadCount']);
         Route::post('/{notification}/mark-read', [MerchantPortalNotificationController::class, 'markRead']);
         Route::post('/mark-all-read', [MerchantPortalNotificationController::class, 'markAllRead']);
+    });
+
+    Route::prefix('users')->group(function () {
+        Route::get('/', [MerchantPortalUsersController::class, 'index']);
+        Route::post('/', [MerchantPortalUsersController::class, 'store']);
+        Route::get('/{merchantUser}', [MerchantPortalUsersController::class, 'show']);
+        Route::put('/{merchantUser}', [MerchantPortalUsersController::class, 'update']);
+        Route::delete('/{merchantUser}', [MerchantPortalUsersController::class, 'destroy']);
+        Route::post('/{merchantUser}/suspend', [MerchantPortalUsersController::class, 'suspend']);
+        Route::post('/{merchantUser}/activate', [MerchantPortalUsersController::class, 'activate']);
     });
 });
 
