@@ -70,6 +70,26 @@ class SystemSettingService
             ->values();
     }
 
+    public function getPricingContactEmail(): ?string
+    {
+        $email = $this->get('pricing_contact_email');
+        if (is_string($email) && trim($email) !== '') {
+            return trim($email);
+        }
+
+        $support = $this->get('support_email');
+        if (is_string($support) && trim($support) !== '') {
+            return trim($support);
+        }
+
+        $company = $this->get('company_email');
+        if (is_string($company) && trim($company) !== '') {
+            return trim($company);
+        }
+
+        return config('mail.from.address') ?: 'support@fastlogistics.com';
+    }
+
     /**
      * @param  list<string>  $keys
      * @return array<string, mixed>

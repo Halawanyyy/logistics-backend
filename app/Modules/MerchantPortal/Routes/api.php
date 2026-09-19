@@ -23,6 +23,7 @@ use App\Modules\MerchantPortal\Controllers\MerchantPortalUsersController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalWalletController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalWarehouseChargeController;
 use App\Modules\MerchantPortal\Controllers\MerchantPortalWarehouseProductController;
+use App\Modules\MerchantPortal\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'merchant.portal', 'merchant.operational'])->prefix('merchant-portal')->group(function () {
@@ -150,6 +151,13 @@ Route::middleware(['auth:sanctum', 'merchant.portal', 'merchant.operational'])->
         Route::post('/{merchantUser}/activate', [MerchantPortalUsersController::class, 'activate']);
     });
 });
+
+Route::middleware(['auth:sanctum', 'merchant.portal', 'merchant.operational'])
+    ->prefix('merchant/subscription')
+    ->group(function () {
+        Route::get('/plans', [SubscriptionController::class, 'plans']);
+        Route::post('/subscribe', [SubscriptionController::class, 'subscribe']);
+    });
 
 Route::middleware(['auth:sanctum', 'permission:merchant_portal_users.manage'])
     ->prefix('merchants/{merchant}/portal-users')

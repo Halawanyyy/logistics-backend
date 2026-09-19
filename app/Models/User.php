@@ -28,6 +28,7 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
+        'company_id',
         'name',
         'email',
         'password',
@@ -57,6 +58,11 @@ class User extends Authenticatable
             'password' => 'hashed',
             // 'deleted_at' => 'datetime',
         ];
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function roleRelation(): BelongsTo

@@ -47,7 +47,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
-class DemoDataSeeder extends Seeder
+class LegacyDemoDataSeeder extends Seeder
 {
     /**
      * @var array<string, User>
@@ -771,6 +771,7 @@ use App\Modules\Finance\Models\MerchantPayout;
 use App\Modules\Finance\Models\MerchantWalletTransaction;
 use App\Modules\LocationPricing\Models\Area;
 use App\Modules\LocationPricing\Models\Governorate;
+use App\Modules\LocationPricing\Models\PricingPlan;
 use App\Modules\MerchantPortal\Enums\MerchantPortalRole;
 use App\Modules\MerchantPortal\Enums\MerchantPortalUserStatus;
 use App\Modules\MerchantPortal\Models\MerchantPortalSetting;
@@ -792,6 +793,7 @@ use App\Modules\Warehouse\Models\WarehouseShelf;
 use App\Modules\Warehouse\Models\WarehouseZone;
 use App\Support\DemoDataRegistry;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Seeder;
 
 class DemoDataSeeder extends Seeder
@@ -826,6 +828,7 @@ class DemoDataSeeder extends Seeder
             'phone' => '01010000001',
             'address' => 'DEMO Merchant HQ, Cairo',
             'status' => 'active',
+            'pricing_plan_id' => PricingPlan::query()->where('code', 'growth')->value('id'),
         ]);
 
         $governorate = $this->upsertSoftDeletedModel(Governorate::class, [
@@ -1092,7 +1095,13 @@ class DemoDataSeeder extends Seeder
     private function upsertSoftDeletedModel(string $modelClass, array $attributes, array $values): Model
     {
         /** @var Model $model */
-        $model = $modelClass::withTrashed()->firstOrNew($attributes);
+        $query = $modelClass::query();
+
+        if (in_array(SoftDeletes::class, class_uses_recursive($modelClass), true)) {
+            $query->withTrashed();
+        }
+
+        $model = $query->firstOrNew($attributes);
         $model->fill($values);
 
         if (method_exists($model, 'trashed') && $model->trashed()) {

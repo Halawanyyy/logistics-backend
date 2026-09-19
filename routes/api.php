@@ -25,6 +25,7 @@ require __DIR__.'/../app/Modules/Waybill/Routes/api.php';
 require __DIR__.'/../app/Modules/Dashboard/Routes/api.php';
 require __DIR__.'/../app/Modules/Finance/Routes/api.php';
 require __DIR__.'/../app/Modules/Warehouse/Routes/api.php';
+require __DIR__.'/../app/Modules/Branding/Routes/api.php';
 
 Route::get('/user', function (Request $request) {
     return $request->user();

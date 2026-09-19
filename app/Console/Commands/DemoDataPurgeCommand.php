@@ -73,7 +73,7 @@ class DemoDataPurgeCommand extends Command
             ->where('email', DemoDataRegistry::MERCHANT_EMAIL)
             ->pluck('id');
 
-        $userIds = User::withTrashed()
+        $userIds = User::query()
             ->whereIn('email', DemoDataRegistry::userEmails())
             ->pluck('id');
 
@@ -192,7 +192,7 @@ class DemoDataPurgeCommand extends Command
         );
 
         $counts['users'] = $this->purgeDemoQuery(
-            User::withTrashed()->whereIn('email', DemoDataRegistry::userEmails())
+            User::query()->whereIn('email', DemoDataRegistry::userEmails())
         );
 
         $counts['areas'] = $this->purgeDemoQuery(

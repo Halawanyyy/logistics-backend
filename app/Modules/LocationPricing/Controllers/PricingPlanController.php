@@ -7,6 +7,7 @@ use App\Modules\LocationPricing\Models\PricingPlan;
 use App\Modules\LocationPricing\Requests\StorePricingPlanRequest;
 use App\Modules\LocationPricing\Requests\UpdatePricingPlanRequest;
 use App\Modules\LocationPricing\Resources\PricingPlanResource;
+use App\Modules\LocationPricing\Services\PricingPlanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -14,6 +15,11 @@ use Illuminate\Validation\Rule;
 
 class PricingPlanController
 {
+    public function __construct(
+        private readonly PricingPlanService $pricingPlanService,
+    ) {
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $validated = $request->validate([
@@ -21,9 +27,11 @@ class PricingPlanController
         ]);
 
         $pricingPlans = PricingPlan::query()
+            ->with(['features'])
             ->withCount('merchants')
             ->when(isset($validated['status']), fn ($query) => $query->where('status', $validated['status']))
-            ->latest()
+            ->orderBy('display_order')
+            ->latest('id')
             ->get();
 
         return PricingPlanResource::collection($pricingPlans);
@@ -31,44 +39,28 @@ class PricingPlanController
 
     public function store(StorePricingPlanRequest $request): JsonResponse
     {
-        $validated = $request->validated();
+        $pricingPlan = $this->pricingPlanService->create($request->validated(), $request->user());
 
-        $pricingPlan = PricingPlan::query()->create([
-            'name' => $validated['name'],
-            'code' => $validated['code'],
-            'description' => $validated['description'] ?? null,
-            'monthly_orders_from' => $validated['monthly_orders_from'] ?? null,
-            'monthly_orders_to' => $validated['monthly_orders_to'] ?? null,
-            'status' => $validated['status'] ?? PricingPlanStatus::ACTIVE,
-            'created_by' => $request->user()?->id,
-        ]);
-
-        return (new PricingPlanResource($pricingPlan->loadCount('merchants')))
+        return (new PricingPlanResource($pricingPlan))
             ->response()
             ->setStatusCode(201);
     }
 
     public function show(PricingPlan $pricingPlan): PricingPlanResource
     {
-        return new PricingPlanResource($pricingPlan->loadCount('merchants'));
+        return new PricingPlanResource($pricingPlan->load(['features'])->loadCount('merchants'));
     }
 
     public function update(UpdatePricingPlanRequest $request, PricingPlan $pricingPlan): PricingPlanResource
     {
-        $pricingPlan->update($request->validated());
+        $updated = $this->pricingPlanService->update($pricingPlan, $request->validated());
 
-        return new PricingPlanResource($pricingPlan->fresh()->loadCount('merchants'));
+        return new PricingPlanResource($updated);
     }
 
     public function destroy(PricingPlan $pricingPlan): JsonResponse
     {
-        if ($pricingPlan->merchants()->exists()) {
-            return response()->json([
-                'message' => 'Pricing plan cannot be deleted while assigned to merchants.',
-            ], 422);
-        }
-
-        $pricingPlan->delete();
+        $this->pricingPlanService->delete($pricingPlan);
 
         return response()->json([
             'message' => 'Pricing plan deleted successfully',
