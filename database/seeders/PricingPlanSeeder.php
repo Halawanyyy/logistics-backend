@@ -79,6 +79,8 @@ class PricingPlanSeeder extends Seeder
             $plan = PricingPlan::query()
                 ->withTrashed()
                 ->firstOrNew(['code' => $data['code']]);
+            $features = $data['features'];
+            unset($data['features']);
 
             $plan->fill($data);
 
