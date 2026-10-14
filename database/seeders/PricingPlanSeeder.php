@@ -89,6 +89,15 @@ class PricingPlanSeeder extends Seeder
             }
 
             $plan->save();
+            foreach ($features as $index => $label) {
+    $plan->features()->updateOrCreate(
+        ['label' => $label],
+        [
+            'is_included' => true,
+            'sort_order' => $index + 1,
+        ],
+    );
+}
         }
     }
 }
